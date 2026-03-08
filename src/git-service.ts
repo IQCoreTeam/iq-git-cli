@@ -253,7 +253,9 @@ export class GitService {
       tableSeed,
       JSON.stringify(row)
     );
+    const wallet = this.signer.publicKey.toBase58();
     console.log("Repo created!");
+    console.log(`View at: https://git.iqlabs.dev/${wallet}/${name}`);
   }
 
   async setVisibility(repoName: string, isPublic: boolean) {
@@ -435,7 +437,9 @@ export class GitService {
       tableSeed,
       JSON.stringify(commit)
     );
+    const wallet = this.signer.publicKey.toBase58();
     console.log(`Commit successful! ID: ${commit.id}`);
+    console.log(`View at: https://git.iqlabs.dev/${wallet}/${repoName}`);
   }
 
   async canReadRepo(repoName: string, ownerAddress?: string): Promise<boolean> {
@@ -547,7 +551,9 @@ export class GitService {
       })
     );
 
+    const wallet = this.signer.publicKey.toBase58();
     console.log("Fork complete!");
+    console.log(`View at: https://git.iqlabs.dev/${wallet}/${newRepoName}`);
   }
 
   private scanDirectory(
