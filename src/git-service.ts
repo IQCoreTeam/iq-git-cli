@@ -4,6 +4,7 @@ import * as os from "node:os";
 import { createHash, randomUUID } from "node:crypto";
 import {
   Connection,
+  Keypair,
   PublicKey,
   Signer,
   Transaction,
@@ -12,16 +13,12 @@ import {
   SystemProgram,
 } from "@solana/web3.js";
 import { getWalletCtx } from "./wallet_manager.js";
-import iqlabs from "iqlabs-sdk/src";
-import { Idl } from "@coral-xyz/anchor";
+import iqlabs from "iqlabs-sdk";
 import { createRequire } from "module";
 import { chunkString, DEFAULT_CHUNK_SIZE } from "./chunk.js";
 import { sendAndConfirmTransaction } from "@solana/web3.js";
 
 import { GIT_CONSTANTS, OWNER_SCOPED_TABLES, Repository, Commit, FileTree } from "./types.js";
-
-const require = createRequire(import.meta.url);
-const IDL = require("iqlabs-sdk/idl/code_in.json") as Idl;
 
 const DEFAULT_ROOT_ID = "iq-git-v1";
 
@@ -47,7 +44,7 @@ const sendInstruction = async (
 
 export class GitService {
   readonly connection: Connection;
-  readonly signer: Signer;
+  readonly signer: Keypair;
   readonly dbRootId: Uint8Array;
   readonly programId: PublicKey;
   readonly builder: ReturnType<typeof iqlabs.contract.createInstructionBuilder>;
@@ -55,13 +52,10 @@ export class GitService {
   constructor(rootId = DEFAULT_ROOT_ID) {
     const { connection, signer } = getWalletCtx();
     this.connection = connection;
-    this.signer = signer;
+    this.signer = signer as Keypair;
     this.dbRootId = sha256(rootId);
-    this.programId = iqlabs.contract.getProgramId();
-    this.builder = iqlabs.contract.createInstructionBuilder(
-      IDL,
-      this.programId
-    );
+    this.programId = new PublicKey(iqlabs.contract.DEFAULT_ANCHOR_PROGRAM_ID);
+    this.builder = iqlabs.contract.createInstructionBuilder();
   }
 
   /** Compute table seed — owner-scoped tables append the wallet address */
@@ -183,12 +177,8 @@ export class GitService {
 
   private async ensureTable(tableName: string, columns: string[], ownerAddress?: string) {
     const tableSeed = this.tableSeed(tableName, ownerAddress);
-    const dbRoot = iqlabs.contract.getDbRootPda(this.dbRootId, this.programId);
-    const tablePda = iqlabs.contract.getTablePda(
-      dbRoot,
-      tableSeed,
-      this.programId
-    );
+    const dbRoot = iqlabs.contract.getDbRootPda(this.dbRootId);
+    const tablePda = iqlabs.contract.getTablePda(dbRoot, tableSeed);
 
     const info = await this.connection.getAccountInfo(tablePda);
     if (!info) {
@@ -197,32 +187,16 @@ export class GitService {
       const idCol =
         columns.find((c) => c === "id" || c === "name") || columns[0];
 
-      const ix = iqlabs.contract.createTableInstruction(
-        this.builder,
-        {
-          db_root: dbRoot,
-          table: tablePda,
-          signer: this.signer.publicKey,
-          system_program: SystemProgram.programId,
-          receiver: this.signer.publicKey,
-          instruction_table: iqlabs.contract.getInstructionTablePda(
-            dbRoot,
-            tableSeed,
-            this.programId
-          ),
-        },
-        {
-          db_root_id: this.dbRootId,
-          table_seed: tableSeed,
-          table_name: Buffer.from(tableName),
-          column_names: columns.map((c) => Buffer.from(c)),
-          id_col: Buffer.from(idCol),
-          ext_keys: [],
-          gate_mint_opt: null,
-          writers_opt: null,
-        }
+      await iqlabs.writer.createTable(
+        this.connection,
+        this.signer,
+        this.dbRootId,
+        tableSeed,
+        tableName,
+        columns,
+        idCol,
+        []
       );
-      await sendInstruction(this.connection, this.signer, ix);
     }
   }
 
@@ -365,11 +339,10 @@ export class GitService {
           const txId = await iqlabs.writer.codeIn(
             { connection: this.connection, signer: this.signer },
             chunks,
-            undefined,
             path.basename(f),
             0,
             "application/octet-stream",
-            (p) => {}
+            (p: number) => {}
           );
 
           fileTree[relativePath] = {
@@ -404,7 +377,6 @@ export class GitService {
     const treeTxId = await iqlabs.writer.codeIn(
       { connection: this.connection, signer: this.signer },
       treeChunks,
-      undefined,
       "tree.json",
       0,
       "application/json"
