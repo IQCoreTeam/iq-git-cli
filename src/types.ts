@@ -57,3 +57,48 @@ export const OWNER_SCOPED_TABLES = new Set([
   GIT_CONSTANTS.COLLABORATORS_TABLE,
   GIT_CONSTANTS.FORKS_TABLE,
 ]);
+
+// ----- IQ Pages -----
+
+export interface IqpagesConfig {
+  name: string;
+  version: string;
+  description: string;
+  entry: string;
+}
+
+export interface IqprofileConfig {
+  displayName: string;
+  description: string;
+  icon?: string;
+  routes?: {
+    profile?: string;
+    myPage?: string;
+  };
+}
+
+export const IQPAGES_CONSTANTS = {
+  ROOT_ID: "iqpages-root",
+  FEE_LAMPORTS: 200_000_000,
+  FEE_RECIPIENT: "EWNSTD8tikwqHMcRNuuNbZrnYJUiJdKq9UXLXSEU4wZ1",
+  CONFIG_FILENAME: "iqpages.json",
+  PROFILE_FILENAME: "iqprofile.json",
+} as const;
+
+export const IQPAGES_TEMPLATE = `{
+  "name": "my-app",
+  "version": "1.0.0",
+  "description": "Short description",
+  "entry": "index.html"
+}
+`;
+
+export const IQPROFILE_TEMPLATE = `{
+  "displayName": "My App",
+  "description": "Short description",
+  "icon": "./icon.png",
+  "routes": {
+    "profile": "/profile/{walletAddress}"
+  }
+}
+`;
