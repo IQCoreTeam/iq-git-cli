@@ -3,3 +3,7 @@ dist
 .DS_Store
 keypair.json
 .env
+.env.*
+.idea/
+.vscode/
+*.tgz

@@ -1,15 +1,10 @@
 {
   "name": "@iqlabs-official/git",
-  "version": "0.1.0",
-  "description": "On-chain Git for Solana — version control stored entirely on-chain via IQLabs SDK",
+  "version": "0.2.0-rc.0",
+  "description": "On-chain Git CLI for Solana — thin wrapper over @iqlabs-official/git-sdk.",
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "exports": {
-    ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
-    }
+  "bin": {
+    "iq-git": "dist/cli.js"
   },
   "files": [
     "dist",
@@ -17,12 +12,11 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "dev": "tsx src/index.ts"
+    "dev": "tsx src/cli.ts"
   },
   "dependencies": {
-    "@coral-xyz/anchor": "^0.32.1",
+    "@iqlabs-official/git-sdk": "^0.1.2",
     "@solana/web3.js": "^1.98.0",
-    "ignore": "^7.0.5",
     "iqlabs-sdk": "npm:@iqlabs-official/solana-sdk@^0.1.21"
   },
   "devDependencies": {
