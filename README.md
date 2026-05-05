@@ -1,98 +1,109 @@
-# @iqlabs-official/git
+# iq-git CLI
 
-On-chain Git for Solana. Version control stored entirely on the blockchain via [IQLabs SDK](https://www.npmjs.com/package/@iqlabs-official/solana-sdk).
+Command-line client for on-chain Git on Solana. Stores repos, files, and
+commit history entirely on chain via [@iqlabs-official/git-sdk](https://www.npmjs.com/package/@iqlabs-official/git-sdk).
 
-**This is the CLI/library.** For the browser-based viewer (like GitHub), see [gitfrontend](https://github.com/IQCoreTeam/gitfrontend) — deployed at [git.iqlabs.dev](https://git.iqlabs.dev).
-
-## What is this?
-
-Think of it as **git** (the CLI tool) vs **GitHub** (the web UI):
-
-| | git | GitHub |
-|---|---|---|
-| **On-chain** | `@iqlabs-official/git` (this package) | [git.iqlabs.dev](https://git.iqlabs.dev) |
-| **Role** | Create repos, commit files, manage branches | Browse repos, view commits, read files |
-| **Runs on** | CLI / Node.js | Browser (Next.js) |
-
-All data lives on Solana. No servers, no databases — the blockchain *is* the database.
-
-## Features
-
-- **Create repos** — on-chain, owned by your Solana wallet
-- **Commit files** — incremental uploads, unchanged files reuse existing tx IDs
-- **Clone / checkout** — download any commit to local disk
-- **Branches** — create and list named refs
-- **Collaborators** — add writers to your repos
-- **Fork** — fork anyone's public repo into your own namespace
-- **Owner-scoped isolation** — each wallet has its own table namespace (like `github.com/{user}/{repo}`)
-- **Visibility** — public or private repos with permission checks
+```
+iqgit init
+iqgit create my-app --public
+iqgit commit -m "first"
+iqgit push
+```
 
 ## Install
 
 ```bash
-npm install @iqlabs-official/git
+npm install -g @iqlabs-official/iq-git-cli
 ```
 
-## Quick start
+Once installed, `iqgit` is available from any directory.
+
+### Local development
 
 ```bash
-# Set up your wallet
-export SOLANA_RPC_ENDPOINT="https://api.mainnet-beta.solana.com"
-# Place your keypair at ./keypair.json or ~/.config/solana/id.json
-
-# Use in your code
+git clone <this-repo>
+cd iq-git-cli
+npm install
+npm run build
+npm link            # registers `iqgit` against this build
 ```
 
-```typescript
-import { GitService } from "@iqlabs-official/git";
+## First-run setup
 
-const git = new GitService();
+The first time you run a write command (`create`, `push`, `wallet balance`),
+the CLI walks you through:
 
-// Create a repo
-await git.createRepo("my-project", "My on-chain project");
+1. **Wallet**: generate a new Solana keypair, or point at an existing
+   keypair JSON file. Stored in `~/.iq-git/wallets/default.json` by default.
+2. **RPC URL**: required for any chain interaction. Free option is
+   [Helius](https://www.helius.dev/). Paste the URL when prompted.
+   Saved to `~/.iq-git/.env`.
 
-// Commit current directory
-await git.commit("my-project", "initial commit");
+Read-only commands (`clone`, `log`, `status`, `registry`) only need the RPC.
 
-// View commit history
-const log = await git.getLog("my-project");
+## Commands
 
-// Clone someone else's repo (by their wallet address)
-await git.clone("their-repo", "./output", "TheirWalletAddress...");
+| Command | Description |
+|---|---|
+| `iqgit init` | Create local `.iqgit/` directory. No chain interaction. |
+| `iqgit create <name> [--public\|--private]` | Register repo on chain. |
+| `iqgit commit -m "<msg>"` | Stage a snapshot locally under `.iqgit/pending/`. No chain interaction. |
+| `iqgit push` | Upload all pending commits to chain. Resume-safe. |
+| `iqgit clone <owner>/<repo> [dir]` | Pull a repo's latest snapshot to disk. |
+| `iqgit restore [commitId]` | Restore working tree to a commit (default: latest). |
+| `iqgit log [--limit N] [--owner ... --repo ...]` | Print commit history. |
+| `iqgit status` | Show HEAD, pending commits, and working tree changes. |
+| `iqgit registry [--limit N]` | Browse the public on-chain repo gallery. |
+| `iqgit config [key] [value]` | Get or set global config. |
+| `iqgit wallet new\|show\|balance\|repos` | Manage keypair. |
 
-// List your repos
-const repos = await git.listRepos();
+## How it works
 
-// List someone else's repos
-const theirRepos = await git.listRepos("TheirWalletAddress...");
+Each `push` writes three kinds of records on chain:
+
+1. **Blobs**: file contents, one inscription per unique hash
+2. **Tree**: JSON map of `{ path: { txId, hash } }`, one per commit
+3. **Commit row**: `{ id, message, treeTxId, parentCommitId, timestamp, author }`
+
+`commit` builds these locally; `push` uploads them. Splitting the two means
+multiple `commit`s can be batched into a single `push`, amortizing Solana
+transaction fees.
+
+### Resume after failure
+
+`push` is checkpointed:
+
+- Each blob's `{ hash: txId }` is appended to `.iqgit/upload-cache.json`
+  on success, with synchronous flush.
+- The tree's txId and the commit row's signature are persisted into the
+  pending commit's `meta.json` between steps.
+
+If a push fails partway through (network drop, kill signal, RPC error),
+the next `iqgit push` resumes exactly where the last one stopped. Already
+uploaded blobs are reused from cache instead of being re-inscribed.
+
+### Ignore rules
+
+`scan` reads both `.gitignore` and `.iqgitignore` (if present) and merges
+them. `.git/` and `.iqgit/` are always excluded. Use `.iqgitignore` for
+files you want in git but not on chain (e.g. large binaries).
+
+### Large file warning
+
+Files larger than 1MB trigger a confirmation prompt during `commit` since
+on-chain inscription cost scales with size. Skip with `--no-warn-large`.
+
+## Project layout
+
 ```
-
-## Architecture
-
-```
-Solana Program (code_in IDL)
-    ↓
-IQLabs SDK (@iqlabs-official/solana-sdk)
-    ↓
-@iqlabs-official/git (this package)
-    ↓
-Your app / CLI / plugin
-```
-
-Each wallet gets its own isolated tables on-chain:
-```
-sha256("git_repos_v2_" + walletAddress)  →  PDA for that wallet's repos
-sha256("git_commits_" + walletAddress)   →  PDA for that wallet's commits
-```
-
-This means two wallets can both have a repo named `my-project` without conflict — just like `alice/my-project` and `bob/my-project` on GitHub.
-
-## URL format
-
-On [git.iqlabs.dev](https://git.iqlabs.dev), repos are accessed as:
-
-```
-https://git.iqlabs.dev/{walletAddress}/{repoName}
+src/
+├── cli.ts              # commander entry, registers each command
+├── setup.ts            # wallet / RPC gate; constructs GitClient
+├── ui.ts               # chalk + ora + inquirer wrappers
+├── core/
+│   ├── scan.ts         # fs walk + ignore + base64 + hash
+│   └── repo.ts         # all .iqgit/ disk I/O
+└── commands/           # one file per CLI command
 ```
 
 ## License

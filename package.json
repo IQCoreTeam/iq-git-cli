@@ -1,40 +1,39 @@
 {
-  "name": "@iqlabs-official/git",
-  "version": "0.2.0-rc.0",
-  "description": "On-chain Git CLI for Solana — thin wrapper over @iqlabs-official/git-sdk.",
+  "name": "@iqlabs-official/iq-git-cli",
+  "version": "0.1.0",
+  "description": "Command-line client for on-chain Git on Solana. Talks to @iqlabs-official/git-sdk to commit, push, clone, and browse repos stored entirely on chain.",
+  "keywords": ["solana", "git", "on-chain", "iqlabs", "iq-git", "cli"],
   "type": "module",
   "bin": {
-    "iq-git": "dist/cli.js"
+    "iqgit": "./dist/cli.js"
   },
   "files": [
     "dist",
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "dev": "tsx src/cli.ts"
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "start": "node ./dist/cli.js"
   },
   "dependencies": {
-    "@iqlabs-official/git-sdk": "^0.1.2",
+    "@iqlabs-official/git-sdk": "^0.1.4",
+    "@iqlabs-official/solana-sdk": "^0.1.21",
     "@solana/web3.js": "^1.98.0",
-    "iqlabs-sdk": "npm:@iqlabs-official/solana-sdk@^0.1.21"
+    "@inquirer/prompts": "^5.0.0",
+    "chalk": "^5.3.0",
+    "commander": "^12.0.0",
+    "dotenv": "^16.4.0",
+    "ignore": "^5.3.0",
+    "ora": "^8.0.0"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
-    "tsx": "^4.19.2",
-    "typescript": "^5.7.3"
+    "@types/node": "^20.11.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.4.0"
   },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/IQCoreTeam/iq-git"
-  },
-  "license": "MIT",
-  "keywords": [
-    "solana",
-    "git",
-    "on-chain",
-    "iqlabs",
-    "version-control",
-    "decentralized"
-  ]
+  "engines": {
+    "node": ">=18"
+  }
 }
