@@ -7,7 +7,7 @@
 
 import type { Command } from "commander";
 import { readRegistryPage } from "@iqlabs-official/git-sdk/node";
-import { setup } from "../setup";
+import { setupReadOnly } from "../setup";
 import * as ui from "../ui";
 
 export function register(program: Command): void {
@@ -16,7 +16,7 @@ export function register(program: Command): void {
     .description("browse the public on-chain repo gallery")
     .option("--limit <n>", "max entries", "20")
     .action(async (opts: { limit: string }) => {
-      const { connection } = await setup();
+      const connection = await setupReadOnly();
       const entries = await readRegistryPage(connection, { limit: Number(opts.limit) });
       if (entries.length === 0) {
         ui.log.dim("registry empty");
