@@ -6,6 +6,7 @@ commit history entirely on chain via [@iqlabs-official/git-sdk](https://www.npmj
 ```
 iqgit init
 iqgit create my-app --public
+iqgit add .
 iqgit commit -m "first"
 iqgit push
 ```
@@ -47,7 +48,9 @@ Read-only commands (`clone`, `log`, `status`, `registry`) only need the RPC.
 |---|---|
 | `iqgit init` | Create local `.iqgit/` directory. No chain interaction. |
 | `iqgit create <name> [--public\|--private]` | Register repo on chain. |
-| `iqgit commit -m "<msg>"` | Stage a snapshot locally under `.iqgit/pending/`. No chain interaction. |
+| `iqgit add <pathspec...>` | Stage paths for the next commit. |
+| `iqgit reset [pathspec...]` | Unstage paths (no args clears the index). |
+| `iqgit commit -m "<msg>"` | Build a snapshot of staged paths under `.iqgit/pending/`. No chain interaction. |
 | `iqgit push` | Upload all pending commits to chain. Resume-safe. |
 | `iqgit clone <owner>/<repo> [dir]` | Pull a repo's latest snapshot to disk. |
 | `iqgit restore [commitId]` | Restore working tree to a commit (default: latest). |

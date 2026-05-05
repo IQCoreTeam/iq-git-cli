@@ -8,6 +8,8 @@
 import { Command } from "commander";
 import { register as initCmd } from "./commands/init";
 import { register as createCmd } from "./commands/create";
+import { register as addCmd } from "./commands/add";
+import { register as resetCmd } from "./commands/reset";
 import { register as commitCmd } from "./commands/commit";
 import { register as pushCmd } from "./commands/push";
 import { register as cloneCmd } from "./commands/clone";
@@ -24,6 +26,8 @@ const program = new Command("iqgit")
 
 initCmd(program);
 createCmd(program);
+addCmd(program);
+resetCmd(program);
 commitCmd(program);
 pushCmd(program);
 cloneCmd(program);

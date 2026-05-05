@@ -10,7 +10,7 @@
 // (storage.ts:33), so cache lookups match SDK's internal dedup.
 
 import { createHash } from "node:crypto";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import ignore, { type Ignore } from "ignore";
 
@@ -21,7 +21,21 @@ export interface ScanFile {
   size: number;
 }
 
-export function scan(repoRoot: string): ScanFile[] {
+// Build a ScanFile from a single working-tree path. Used by `add`-driven
+// flows (commit) where the caller already knows which paths to read; the
+// full repo walk in `scan` would over-fetch.
+export function readScanFile(repoRoot: string, repoRel: string): ScanFile {
+  const buf = readFileSync(join(repoRoot, repoRel));
+  const base64 = buf.toString("base64");
+  return {
+    path: repoRel,
+    base64,
+    hash: createHash("sha256").update(base64).digest("hex"),
+    size: buf.byteLength,
+  };
+}
+
+export function loadIgnore(repoRoot: string): Ignore {
   const ig = ignore().add([".git/", ".iqgit/"]);
   for (const name of [".gitignore", ".iqgitignore"]) {
     try {
@@ -30,9 +44,12 @@ export function scan(repoRoot: string): ScanFile[] {
       // file absent — fine
     }
   }
+  return ig;
+}
 
+export function scan(repoRoot: string): ScanFile[] {
   const out: ScanFile[] = [];
-  walk(repoRoot, repoRoot, ig, out);
+  walk(repoRoot, repoRoot, loadIgnore(repoRoot), out);
   return out;
 }
 
@@ -54,15 +71,8 @@ function walk(root: string, dir: string, ig: Ignore, out: ScanFile[]): void {
       walk(root, abs, ig, out);
       continue;
     }
-    if (!entry.isFile()) continue;
-
-    const buf = readFileSync(abs);
-    const base64 = buf.toString("base64");
-    out.push({
-      path: rel,
-      base64,
-      hash: createHash("sha256").update(base64).digest("hex"),
-      size: statSync(abs).size,
-    });
+    if (entry.isFile()) {
+      out.push(readScanFile(root, rel));
+    }
   }
 }

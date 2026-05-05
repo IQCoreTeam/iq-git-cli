@@ -8,6 +8,7 @@
 //   <repoRoot>/.iqgit/
 //     ├── config.json        { owner, repo, isPublic }
 //     ├── HEAD               last successfully-pushed commitId (utf8)
+//     ├── index.json         string[] — paths staged for the next commit
 //     ├── pending/
 //     │   └── NNN-<commitId>/
 //     │       ├── meta.json  { id, message, parentCommitId, timestamp,
@@ -99,6 +100,25 @@ export function readHead(repoRoot: string): string | null {
 
 export function writeHead(repoRoot: string, commitId: string): void {
   writeFileSync(join(repoRoot, DIR, "HEAD"), commitId);
+}
+
+// === index.json ===
+//
+// Set of staged paths for the next commit. Stored as a plain string[] —
+// order doesn't matter, and a Set serialized as sorted array keeps diffs
+// readable for anyone who peeks at the file.
+
+export function readIndex(repoRoot: string): string[] {
+  try {
+    return JSON.parse(readFileSync(join(repoRoot, DIR, "index.json"), "utf8")) as string[];
+  } catch {
+    return [];
+  }
+}
+
+export function writeIndex(repoRoot: string, paths: string[]): void {
+  const sorted = Array.from(new Set(paths)).sort();
+  writeFileSync(join(repoRoot, DIR, "index.json"), JSON.stringify(sorted, null, 2));
 }
 
 // === pending ===

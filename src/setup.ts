@@ -52,6 +52,17 @@ export async function setup(): Promise<SetupResult> {
   return { client: new GitClient({ connection, signer }), signer, connection };
 }
 
+// Read-only path for commands that only need to fetch from chain
+// (e.g. commit needs the base tree). Skips wallet prompts entirely.
+export async function setupReadOnly(): Promise<Connection> {
+  mkdirSync(HOME_DIR, { recursive: true });
+  loadEnv({ path: ENV_PATH });
+  const rpcUrl = await loadOrPromptRpc();
+  const connection = new Connection(rpcUrl, "confirmed");
+  await healthCheck(connection);
+  return connection;
+}
+
 async function loadOrCreateWallet(): Promise<Keypair> {
   const cfg = readGlobalConfig();
   let path = cfg.walletPath;
