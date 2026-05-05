@@ -105,7 +105,3 @@ src/
 │   └── repo.ts         # all .iqgit/ disk I/O
 └── commands/           # one file per CLI command
 ```
-
-## License
-
-MIT
