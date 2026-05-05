@@ -81,7 +81,14 @@ export function initRepo(cwd: string): void {
 // === config.json ===
 
 export function readConfig(repoRoot: string): RepoConfig {
-  return JSON.parse(readFileSync(join(repoRoot, DIR, "config.json"), "utf8")) as RepoConfig;
+  // Defensive: pre-fix repos may lack config.json. Return defaults so
+  // `add` / `status` / `commit` give the friendly "run iqgit create first"
+  // message via commit.ts:41 instead of an ENOENT stack trace.
+  try {
+    return JSON.parse(readFileSync(join(repoRoot, DIR, "config.json"), "utf8")) as RepoConfig;
+  } catch {
+    return { owner: "", repo: "", isPublic: true };
+  }
 }
 
 export function writeConfig(repoRoot: string, cfg: RepoConfig): void {
