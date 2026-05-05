@@ -25,7 +25,7 @@ import * as ui from "./ui";
 const HOME_DIR = join(homedir(), ".iq-git");
 const ENV_PATH = join(HOME_DIR, ".env");
 const CONFIG_PATH = join(HOME_DIR, "config.json");
-const DEFAULT_WALLET = join(HOME_DIR, "wallets", "default.json");
+export const DEFAULT_WALLET = join(HOME_DIR, "wallets", "default.json");
 const HELIUS_URL = "https://www.helius.dev/";
 
 interface GlobalConfig {
@@ -88,6 +88,12 @@ async function loadOrCreateWallet(): Promise<Keypair> {
     writeGlobalConfig({ ...cfg, walletPath: path });
   }
 
+  return loadKeypairFromFile(path);
+}
+
+// Single source of truth for parsing a Solana keypair JSON file. Used by
+// setup() above and wallet.ts:walletShow (CODE-RULES §2).
+export function loadKeypairFromFile(path: string): Keypair {
   try {
     const secret = JSON.parse(readFileSync(path, "utf8")) as number[];
     return Keypair.fromSecretKey(Uint8Array.from(secret));

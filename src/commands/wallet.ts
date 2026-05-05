@@ -9,16 +9,13 @@
 //   sdk: readOwnerRepos (for `repos` action)
 //   out: stdout
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import type { Command } from "commander";
 import { Keypair, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { readOwnerRepos } from "@iqlabs-official/git-sdk/node";
-import { readGlobalConfig, setup } from "../setup";
+import { DEFAULT_WALLET, loadKeypairFromFile, readGlobalConfig, setup } from "../setup";
 import * as ui from "../ui";
-
-const DEFAULT_WALLET = join(homedir(), ".iq-git", "wallets", "default.json");
 
 export function register(program: Command): void {
   program
@@ -53,8 +50,7 @@ function walletNew(): void {
 
 function walletShow(): void {
   const path = readGlobalConfig().walletPath ?? DEFAULT_WALLET;
-  const secret = JSON.parse(readFileSync(path, "utf8")) as number[];
-  const kp = Keypair.fromSecretKey(Uint8Array.from(secret));
+  const kp = loadKeypairFromFile(path);
   ui.log.info(`path:   ${path}`);
   ui.log.info(`pubkey: ${kp.publicKey.toBase58()}`);
 }
