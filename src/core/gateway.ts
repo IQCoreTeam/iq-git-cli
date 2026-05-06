@@ -16,7 +16,7 @@
 //   GATEWAY_URL=off                   disable gateway, all reads via RPC
 
 import iqlabs from "@iqlabs-official/solana-sdk";
-import { loadTree } from "@iqlabs-official/git-sdk/node";
+import { loadBlob, loadTree } from "@iqlabs-official/git-sdk/node";
 
 // Defaults match iq-chan/src/lib/config.ts so iqgit, blockchan and any
 // other consumer hit the same 3 read endpoints.
@@ -103,6 +103,23 @@ export async function gwLoadTreeJson<T>(txSignature: string): Promise<T> {
     }
   }
   return (await loadTree(txSignature)) as T;
+}
+
+// Load a base64 blob by tx signature, gateway-first. Falls back to SDK's
+// loadBlob (RPC) on any gateway failure. Used for clone's per-file blob
+// fetches; gateway's /data/{sig} handles inline/linked-list/session
+// reassembly internally so callers don't need three code paths.
+export async function gwLoadBlobBase64(txSignature: string): Promise<string> {
+  const res = await gwFetch(`/data/${txSignature}`);
+  if (res !== null) {
+    try {
+      const env = (await res.json()) as { data?: string };
+      if (typeof env.data === "string") return env.data;
+    } catch {
+      // fall through
+    }
+  }
+  return await loadBlob(txSignature);
 }
 
 // Fire-and-forget cache-warm hint after a write. Tries each gateway until
