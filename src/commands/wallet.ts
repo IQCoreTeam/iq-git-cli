@@ -6,19 +6,20 @@
 //        iqgit wallet show      → print pubkey + path
 //        iqgit wallet balance   → print SOL balance
 //        iqgit wallet repos     → list repos owned by current pubkey
-//   sdk: readOwnerRepos (for `repos` action)
+//   reads: gwFetchAllRows on git_repos_v2_<owner> (for `repos` action)
 //   out: stdout
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import type { Command } from "commander";
 import { Keypair, LAMPORTS_PER_SOL } from "@solana/web3.js";
-import { readOwnerRepos } from "@iqlabs-official/git-sdk/node";
-import { readGlobalConfig, setup } from "../setup";
-import * as ui from "../ui";
+import { IQGIT_ROOT_ID, repoListHint } from "@iqlabs-official/git-sdk/node";
+import { getDbRootPda, getTablePda } from "@iqlabs-official/solana-sdk/contract";
+import { toSeedBytes } from "@iqlabs-official/solana-sdk/utils";
+import { gwFetchAllRows } from "../core/gateway";
+import { DEFAULT_WALLET, loadKeypairFromFile, readGlobalConfig, setup } from "../setup";
 
-const DEFAULT_WALLET = join(homedir(), ".iq-git", "wallets", "default.json");
+import * as ui from "../ui";
 
 export function register(program: Command): void {
   program
@@ -53,8 +54,7 @@ function walletNew(): void {
 
 function walletShow(): void {
   const path = readGlobalConfig().walletPath ?? DEFAULT_WALLET;
-  const secret = JSON.parse(readFileSync(path, "utf8")) as number[];
-  const kp = Keypair.fromSecretKey(Uint8Array.from(secret));
+  const kp = loadKeypairFromFile(path);
   ui.log.info(`path:   ${path}`);
   ui.log.info(`pubkey: ${kp.publicKey.toBase58()}`);
 }
@@ -67,8 +67,14 @@ async function walletBalance(): Promise<void> {
 }
 
 async function walletRepos(): Promise<void> {
-  const { signer, connection } = await setup();
-  const repos = await readOwnerRepos(connection, signer.publicKey.toBase58());
+  const { signer } = await setup();
+  // Gateway-first read of git_repos_v2_<owner>; falls through to RPC.
+  const owner = signer.publicKey.toBase58();
+  const dbRoot = getDbRootPda(toSeedBytes(IQGIT_ROOT_ID));
+  const tablePda = getTablePda(dbRoot, toSeedBytes(repoListHint(owner)));
+  const repos = (await gwFetchAllRows(tablePda.toBase58(), 200)) as Array<{
+    name: string; description: string; isPublic: boolean;
+  }>;
   if (repos.length === 0) {
     ui.log.dim("no repos yet");
     return;

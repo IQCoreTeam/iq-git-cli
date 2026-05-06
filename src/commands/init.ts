@@ -8,6 +8,12 @@
 // Why no auto-create on init: chain writes cost SOL. We want users to
 // explicitly opt in via `iqgit create` so the first transaction is
 // never a surprise.
+//
+// Stub config: we write .iqgit/config.json with empty `owner` so that
+// `iqgit add`, `iqgit commit`, `iqgit status` work against the local
+// pending state without an ENOENT crash. The empty owner is the gate
+// commit.ts already checks — it triggers the friendly "run iqgit create
+// first" message at the right time.
 
 import { existsSync } from "node:fs";
 import { join } from "node:path";
@@ -25,14 +31,11 @@ export function register(program: Command): void {
       const cwd = process.cwd();
       if (existsSync(join(cwd, ".iqgit"))) ui.fail("already an iqgit repo");
       repo.initRepo(cwd);
-
-      if (opts.name) {
-        repo.writeConfig(cwd, {
-          owner: "",
-          repo: opts.name,
-          isPublic: !opts.private,
-        });
-      }
+      repo.writeConfig(cwd, {
+        owner: "",
+        repo: opts.name ?? "",
+        isPublic: !opts.private,
+      });
       ui.log.success("Initialized empty iqgit repo in .iqgit/");
       ui.log.dim("Next: iqgit create <name> [--public|--private]");
     });

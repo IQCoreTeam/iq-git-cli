@@ -1,17 +1,24 @@
 // `iqgit log [--limit N]` — print commit history newest-first.
-// Read-only; only RPC stage of setup needed.
+// Read-only. Uses gwFetchRows which transparently routes through the
+// gateway when GATEWAY_URL is set, falls back to direct RPC otherwise.
 //
 //   in:  optional --limit <n>, --owner <pubkey>, --repo <name>
-//   sdk: GitClient.log(owner, repo, { limit })
-//   out: formatted commit list to stdout
 //
 // Owner/repo default from .iqgit/config.json so users can `cd` into a
-// cloned repo and just run `iqgit log`. Override flags exist so users
-// can peek at someone else's repo without cloning.
+// cloned repo and just run `iqgit log`. Override flags exist for peeking
+// at someone else's repo without cloning.
 
 import type { Command } from "commander";
+import {
+  IQGIT_ROOT_ID,
+  commitTableHint,
+  type Commit,
+} from "@iqlabs-official/git-sdk/node";
+import { getDbRootPda, getTablePda } from "@iqlabs-official/solana-sdk/contract";
+import { toSeedBytes } from "@iqlabs-official/solana-sdk/utils";
 import * as repo from "../core/repo";
-import { setup } from "../setup";
+import { gwFetchAllRows } from "../core/gateway";
+import { setupReadOnly } from "../setup";
 import * as ui from "../ui";
 
 export function register(program: Command): void {
@@ -28,10 +35,17 @@ export function register(program: Command): void {
         owner ??= cfg.owner;
         repoName ??= cfg.repo;
       }
-      const { client } = await setup();
-      const commits = await client.log(owner, repoName, { limit: Number(opts.limit) });
+      // Ensure SDK has an RPC configured for the gwFetchRows fallback path.
+      await setupReadOnly();
 
-      for (const c of commits) {
+      const dbRoot = getDbRootPda(toSeedBytes(IQGIT_ROOT_ID));
+      const tablePda = getTablePda(dbRoot, toSeedBytes(commitTableHint(owner, repoName)));
+      const commits = (await gwFetchAllRows(tablePda.toBase58(), Number(opts.limit))) as unknown as Commit[];
+
+      // Gateway returns rows in chain order; SDK returns newest-first. Sort
+      // here unconditionally so output is stable regardless of source.
+      const sorted = [...commits].sort((a, b) => b.timestamp - a.timestamp);
+      for (const c of sorted) {
         ui.log.info(ui.formatCommit(c));
         ui.log.dim(`        author: ${c.author}`);
         ui.log.dim(`        tree:   ${c.treeTxId}`);

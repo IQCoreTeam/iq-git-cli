@@ -18,6 +18,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { Connection, Keypair, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import iqlabs from "@iqlabs-official/solana-sdk";
 import { GitClient } from "@iqlabs-official/git-sdk/node";
 import { config as loadEnv } from "dotenv";
 import * as ui from "./ui";
@@ -25,7 +26,7 @@ import * as ui from "./ui";
 const HOME_DIR = join(homedir(), ".iq-git");
 const ENV_PATH = join(HOME_DIR, ".env");
 const CONFIG_PATH = join(HOME_DIR, "config.json");
-const DEFAULT_WALLET = join(HOME_DIR, "wallets", "default.json");
+export const DEFAULT_WALLET = join(HOME_DIR, "wallets", "default.json");
 const HELIUS_URL = "https://www.helius.dev/";
 
 interface GlobalConfig {
@@ -45,6 +46,7 @@ export async function setup(): Promise<SetupResult> {
 
   const signer = await loadOrCreateWallet();
   const rpcUrl = await loadOrPromptRpc();
+  iqlabs.setRpcUrl(rpcUrl);
   const connection = new Connection(rpcUrl, "confirmed");
   await healthCheck(connection);
   await maybeWarnBalance(connection, signer);
@@ -53,14 +55,16 @@ export async function setup(): Promise<SetupResult> {
 }
 
 // Read-only path for commands that only need to fetch from chain
-// (e.g. commit needs the base tree). Skips wallet prompts entirely.
+// (e.g. commit's base tree, log, registry). Skips wallet prompts AND
+// the RPC health check — when gateway is set, we may never hit the RPC,
+// so a bogus RPC URL shouldn't fail-fast. The actual RPC call (via SDK
+// fallback) will surface its own error if it ever runs.
 export async function setupReadOnly(): Promise<Connection> {
   mkdirSync(HOME_DIR, { recursive: true });
   loadEnv({ path: ENV_PATH });
   const rpcUrl = await loadOrPromptRpc();
-  const connection = new Connection(rpcUrl, "confirmed");
-  await healthCheck(connection);
-  return connection;
+  iqlabs.setRpcUrl(rpcUrl);
+  return new Connection(rpcUrl, "confirmed");
 }
 
 async function loadOrCreateWallet(): Promise<Keypair> {
@@ -88,6 +92,12 @@ async function loadOrCreateWallet(): Promise<Keypair> {
     writeGlobalConfig({ ...cfg, walletPath: path });
   }
 
+  return loadKeypairFromFile(path);
+}
+
+// Single source of truth for parsing a Solana keypair JSON file. Used by
+// setup() above and wallet.ts:walletShow (CODE-RULES §2).
+export function loadKeypairFromFile(path: string): Keypair {
   try {
     const secret = JSON.parse(readFileSync(path, "utf8")) as number[];
     return Keypair.fromSecretKey(Uint8Array.from(secret));
