@@ -66,7 +66,17 @@ export function register(program: Command): void {
         }
       }
 
-      const baseTree = await resolveBase(cwd, cfg.owner, cfg.repo);
+      // Ensure SDK has an RPC configured for the gwFetchRows fallback path.
+      await setupReadOnly();
+      const sp = ui.spinner("fetching base tree from chain...").start();
+      let baseTree: Tree;
+      try {
+        baseTree = await resolveBaseTree(cwd, cfg.owner, cfg.repo);
+        sp.succeed("fetched base tree");
+      } catch (e) {
+        sp.fail((e as Error).message);
+        throw e;
+      }
       const tree: Tree = { ...baseTree };
       const blobs = new Map<string, string>();
       for (const f of stagedFiles) {
@@ -99,23 +109,4 @@ export function register(program: Command): void {
       );
       ui.log.dim("Run: iqgit push  to upload on-chain");
     });
-}
-
-// Wrap resolveBaseTree with a spinner + connection bootstrap. Kept here
-// (not in core/tree.ts) because UI is a command concern (CODE-RULES §5).
-async function resolveBase(cwd: string, owner: string, repoName: string): Promise<Tree> {
-  // Pre-check: if local pending exists, no chain read is needed at all.
-  if (repo.listPending(cwd).length > 0 || repo.readHead(cwd) === null) {
-    return resolveBaseTree(cwd, owner, repoName, null);
-  }
-  const sp = ui.spinner("fetching base tree from chain...").start();
-  try {
-    const connection = await setupReadOnly();
-    const tree = await resolveBaseTree(cwd, owner, repoName, connection);
-    sp.succeed("fetched base tree");
-    return tree;
-  } catch (e) {
-    sp.fail((e as Error).message);
-    throw e;
-  }
 }

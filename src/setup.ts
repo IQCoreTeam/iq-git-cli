@@ -18,6 +18,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { Connection, Keypair, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import iqlabs from "@iqlabs-official/solana-sdk";
 import { GitClient } from "@iqlabs-official/git-sdk/node";
 import { config as loadEnv } from "dotenv";
 import * as ui from "./ui";
@@ -45,6 +46,7 @@ export async function setup(): Promise<SetupResult> {
 
   const signer = await loadOrCreateWallet();
   const rpcUrl = await loadOrPromptRpc();
+  iqlabs.setRpcUrl(rpcUrl);
   const connection = new Connection(rpcUrl, "confirmed");
   await healthCheck(connection);
   await maybeWarnBalance(connection, signer);
@@ -53,14 +55,16 @@ export async function setup(): Promise<SetupResult> {
 }
 
 // Read-only path for commands that only need to fetch from chain
-// (e.g. commit needs the base tree). Skips wallet prompts entirely.
+// (e.g. commit's base tree, log, registry). Skips wallet prompts AND
+// the RPC health check — when gateway is set, we may never hit the RPC,
+// so a bogus RPC URL shouldn't fail-fast. The actual RPC call (via SDK
+// fallback) will surface its own error if it ever runs.
 export async function setupReadOnly(): Promise<Connection> {
   mkdirSync(HOME_DIR, { recursive: true });
   loadEnv({ path: ENV_PATH });
   const rpcUrl = await loadOrPromptRpc();
-  const connection = new Connection(rpcUrl, "confirmed");
-  await healthCheck(connection);
-  return connection;
+  iqlabs.setRpcUrl(rpcUrl);
+  return new Connection(rpcUrl, "confirmed");
 }
 
 async function loadOrCreateWallet(): Promise<Keypair> {

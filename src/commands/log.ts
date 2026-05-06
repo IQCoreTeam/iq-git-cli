@@ -1,21 +1,23 @@
 // `iqgit log [--limit N]` — print commit history newest-first.
-// Read-only; uses setupReadOnly so an unconfigured wallet doesn't
-// trigger an interactive generation prompt for what is fundamentally
-// a public chain read.
+// Read-only. Uses gwFetchRows which transparently routes through the
+// gateway when GATEWAY_URL is set, falls back to direct RPC otherwise.
 //
 //   in:  optional --limit <n>, --owner <pubkey>, --repo <name>
-//   sdk: readCommitHistory(connection, owner, repo, { limit })
-//        ↑ exported directly from the SDK; same call GitClient.log
-//          would have made internally.
-//   out: formatted commit list to stdout
 //
 // Owner/repo default from .iqgit/config.json so users can `cd` into a
-// cloned repo and just run `iqgit log`. Override flags exist so users
-// can peek at someone else's repo without cloning.
+// cloned repo and just run `iqgit log`. Override flags exist for peeking
+// at someone else's repo without cloning.
 
 import type { Command } from "commander";
-import { readCommitHistory } from "@iqlabs-official/git-sdk/node";
+import {
+  IQGIT_ROOT_ID,
+  commitTableHint,
+  type Commit,
+} from "@iqlabs-official/git-sdk/node";
+import { getDbRootPda, getTablePda } from "@iqlabs-official/solana-sdk/contract";
+import { toSeedBytes } from "@iqlabs-official/solana-sdk/utils";
 import * as repo from "../core/repo";
+import { gwFetchAllRows } from "../core/gateway";
 import { setupReadOnly } from "../setup";
 import * as ui from "../ui";
 
@@ -33,12 +35,17 @@ export function register(program: Command): void {
         owner ??= cfg.owner;
         repoName ??= cfg.repo;
       }
-      const connection = await setupReadOnly();
-      const commits = await readCommitHistory(connection, owner, repoName, {
-        limit: Number(opts.limit),
-      });
+      // Ensure SDK has an RPC configured for the gwFetchRows fallback path.
+      await setupReadOnly();
 
-      for (const c of commits) {
+      const dbRoot = getDbRootPda(toSeedBytes(IQGIT_ROOT_ID));
+      const tablePda = getTablePda(dbRoot, toSeedBytes(commitTableHint(owner, repoName)));
+      const commits = (await gwFetchAllRows(tablePda.toBase58(), Number(opts.limit))) as unknown as Commit[];
+
+      // Gateway returns rows in chain order; SDK returns newest-first. Sort
+      // here unconditionally so output is stable regardless of source.
+      const sorted = [...commits].sort((a, b) => b.timestamp - a.timestamp);
+      for (const c of sorted) {
         ui.log.info(ui.formatCommit(c));
         ui.log.dim(`        author: ${c.author}`);
         ui.log.dim(`        tree:   ${c.treeTxId}`);

@@ -24,13 +24,18 @@
 
 import type { Connection, Keypair } from "@solana/web3.js";
 import type { Command } from "commander";
-import {
+import { IQGIT_ROOT_ID,
+  commitTableHint,
   uploadBlob,
   uploadTree,
   writeCommit,
   type Commit,
   type FileTree,
 } from "@iqlabs-official/git-sdk/node";
+import { getDbRootPda, getTablePda } from "@iqlabs-official/solana-sdk/contract";
+import { toSeedBytes } from "@iqlabs-official/solana-sdk/utils";
+import { gwNotify } from "../core/gateway";
+
 import * as repo from "../core/repo";
 import { setup } from "../setup";
 import * as ui from "../ui";
@@ -114,5 +119,10 @@ async function pushOne(
     };
     const sig = await writeCommit(connection, signer, repoName, commit);
     repo.updatePendingMeta(p, { committedSig: sig });
+    // Cache warm hint to gateway — fire-and-forget, gateway will pull tx
+    // on its own anyway.
+    const dbRoot = getDbRootPda(toSeedBytes(IQGIT_ROOT_ID));
+    const tablePda = getTablePda(dbRoot, toSeedBytes(commitTableHint(commit.author, repoName)));
+    void gwNotify(tablePda.toBase58(), sig, undefined, signer.publicKey.toBase58());
   }
 }

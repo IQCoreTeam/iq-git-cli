@@ -42,6 +42,25 @@ the CLI walks you through:
 
 Read-only commands (`clone`, `log`, `status`, `registry`) only need the RPC.
 
+## Gateway
+
+`log`, `registry`, `clone` (visibility lookup), and `wallet repos` route
+reads through the IQ Gateway HTTP cache by default
+Defaults to the same 3-gateway chain iq-chan uses (primary →
+Akash direct → backup), with direct RPC as the final fallback. This
+sidesteps RPC per-method rate limits on bulk table reads and matches
+how blockchan's frontend resolves chain reads.
+
+| `GATEWAY_URL` value | behavior |
+|---|---|
+| (unset, default)    | 3-gateway chain → RPC fallback (recommended)  |
+| `https://my.example`| single override → RPC fallback                |
+| `url1,url2,url3`    | comma-separated list, tried in order → RPC   |
+| `off`               | disable all gateway, raw RPC only             |
+
+Anyone can run their own gateway — see
+[iq-gateway](https://github.com/IQCoreTeam/iq-gateway).
+
 ## Commands
 
 | Command | Description |

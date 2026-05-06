@@ -33,11 +33,10 @@ export function register(program: Command): void {
     const files = scan(cwd);
     const filesByPath = new Map(files.map((f) => [f.path, f]));
 
-    // Read base tree only if a chain fetch is actually needed (no pending
-    // and HEAD set). Otherwise resolveBaseTree is purely local.
-    const needsChain = pending.length === 0 && head !== null;
-    const connection = needsChain ? await setupReadOnly() : null;
-    const base = await resolveBaseTree(cwd, cfg.owner, cfg.repo, connection);
+    // Initialize SDK RPC for the gwFetchRows fallback path; resolveBaseTree
+    // skips chain reads entirely when local pending exists or HEAD is null.
+    if (pending.length === 0 && head !== null) await setupReadOnly();
+    const base = await resolveBaseTree(cwd, cfg.owner, cfg.repo);
 
     const stagedAddedOrModified: string[] = [];
     const stagedDeleted: string[] = [];
