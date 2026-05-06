@@ -147,6 +147,12 @@ rmSync(cloneTarget, { recursive: true, force: true });
 out = iqgit(process.env.HOME ?? "/tmp", ["clone", `${owner}/${repoName}`, cloneTarget]);
 assert.match(out, /cloned to/);
 
+// Verify the cloned config carries the actual on-chain visibility
+// (we created the repo with --public so isPublic must be true). Before
+// the fix, clone.ts hardcoded isPublic: true regardless of chain state.
+const clonedCfg = JSON.parse(readFileSync(join(cloneTarget, ".iqgit", "config.json"), "utf8")) as { isPublic: boolean };
+assert.equal(clonedCfg.isPublic, true, "cloned config reflects on-chain isPublic");
+
 const original = readFileSync(join(root, "README.md"), "utf8");
 const cloned = readFileSync(join(cloneTarget, "README.md"), "utf8");
 assert.equal(cloned, original, "README.md round-trips byte-for-byte");
