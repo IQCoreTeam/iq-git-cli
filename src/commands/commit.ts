@@ -2,8 +2,9 @@
 // Stages a pending commit under .iqgit/pending/ that push.ts will upload.
 //
 //   in:  -m <message> (required), --no-warn-large
-//   sdk: loadTree + readCommitHistory (READ ONLY) — used to fetch the
-//        base tree from chain when there's a HEAD but no pending commits.
+//   reads (gateway-first, SDK fallback): commit history + tree blob
+//        when there's a HEAD but no local pending commits — both via
+//        core/tree.ts:resolveBaseTree.
 //   out: appends pending/NNN-<commitId>/ with meta.json + tree.json + blobs/
 //
 // Snapshot semantics (matches git):
