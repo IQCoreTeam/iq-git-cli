@@ -1,4 +1,4 @@
-// `iqgit config` — get/set values in ~/.iq-git/config.json.
+// `iqgit config`: get/set values in ~/.iq-git/config.json.
 // Mirrors `git config` ergonomics but for the global CLI config only
 // (not per-repo). Per-repo config is just .iqgit/config.json which
 // commands edit directly.
@@ -19,6 +19,13 @@ const KNOWN_KEYS = ["walletPath", "rpcUrl"] as const;
 export function register(program: Command): void {
   program
     .command("config [key] [value]")
+    .description("get or set global config (keys: walletPath, rpcUrl)")
+    .addHelpText("after", `
+Examples:
+  iqgit config                                  list all
+  iqgit config rpcUrl                           print current RPC URL
+  iqgit config rpcUrl https://my-rpc.example    change RPC URL
+  iqgit config --unset rpcUrl                   reset (re-prompts next run)`)
     .option("--unset <key>")
     .action((key: string | undefined, value: string | undefined, opts: { unset?: string }) => {
       const cfg = readGlobalConfig() as Record<string, string | undefined>;

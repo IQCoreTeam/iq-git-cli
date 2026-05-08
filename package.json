@@ -1,6 +1,6 @@
 {
   "name": "@iqlabs-official/iq-git-cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Command-line client for on-chain Git on Solana. Talks to @iqlabs-official/git-sdk to commit, push, clone, and browse repos stored entirely on chain.",
   "keywords": [
     "solana",
@@ -11,18 +11,21 @@
     "cli"
   ],
   "type": "module",
+  "license": "Apache-2.0",
   "bin": {
-    "iqgit": "./dist/cli.js"
+    "iqgit": "dist/cli.js"
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "start": "node ./dist/cli.js",
+    "prepublishOnly": "npm run typecheck && npm run build",
     "test": "bun tests/run.ts tests/unit tests/integration",
     "test:unit": "bun tests/run.ts tests/unit",
     "test:integration": "bun tests/run.ts tests/integration",
