@@ -24,7 +24,7 @@ export function register(program: Command): void {
 Examples:
   iqgit config                                  list all
   iqgit config rpcUrl                           print current RPC URL
-  iqgit config rpcUrl https://my-rpc.example    change RPC URL
+  iqgit config rpcUrl "https://my-rpc.example"    change RPC URL
   iqgit config --unset rpcUrl                   reset (re-prompts next run)`)
     .option("--unset <key>")
     .action((key: string | undefined, value: string | undefined, opts: { unset?: string }) => {
