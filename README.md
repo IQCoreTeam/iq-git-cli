@@ -52,15 +52,18 @@ public repo without setting up a wallet first.
 ### Changing the RPC URL later
 
 ```bash
-iqgit config rpcUrl                           # show current value
-iqgit config rpcUrl https://my-rpc.example    # set a new one
-iqgit config --unset rpcUrl                   # reset (will re-prompt)
+iqgit config rpcUrl                             # show current value
+iqgit config rpcUrl 'https://my-rpc.example'    # set a new one
+iqgit config --unset rpcUrl                     # reset (will re-prompt)
 ```
+
+Quote the URL — if it contains `?` (e.g. an API-key query string), an
+unquoted URL makes zsh try to glob it and fail with `no matches found:`.
 
 You can also override per-command via environment variable:
 
 ```bash
-SOLANA_RPC_ENDPOINT=https://my-rpc.example iqgit log
+SOLANA_RPC_ENDPOINT='https://my-rpc.example' iqgit log
 ```
 
 ## Gateway
