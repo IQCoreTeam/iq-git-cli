@@ -21,7 +21,7 @@ import { loadBlob, loadTree } from "@iqlabs-official/git-sdk/node";
 // Defaults match iq-chan/src/lib/config.ts so iqgit, blockchan and any
 // other consumer hit the same 3 read endpoints.
 const DEFAULT_GATEWAYS = [
-  "https://gateway.solanainternet.com",
+  "https://gateway.iqlabs.dev",
   "https://gateway.iqlabs.dev",
   "https://fem4pe7sthdm5f9fkhc1fnmpos.ingress.akashprovid.com",
   "https://fem4pe7sthdm5f9fkhc1fnmpos.ingress.cpu.aesservices.net",
