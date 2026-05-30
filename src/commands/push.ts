@@ -31,41 +31,60 @@ import { IQGIT_ROOT_ID,
   writeCommit,
   type Commit,
   type FileTree,
+  type SessionSpeed,
 } from "@iqlabs-official/git-sdk/node";
 import { getDbRootPda, getTablePda } from "@iqlabs-official/solana-sdk/contract";
 import { toSeedBytes } from "@iqlabs-official/solana-sdk/utils";
 import { gwNotify } from "../core/gateway";
 
 import * as repo from "../core/repo";
-import { setup } from "../setup";
+import { readGlobalConfig, setup } from "../setup";
 import * as ui from "../ui";
 
-export function register(program: Command): void {
-  program.command("push").action(async () => {
-    const cwd = repo.findRepoRoot();
-    const cfg = repo.readConfig(cwd);
-    const queue = repo.listPending(cwd);
-    if (queue.length === 0) {
-      ui.log.info("nothing to push");
-      return;
-    }
-    const { signer, connection } = await setup();
+const SPEEDS = ["light", "medium", "heavy", "extreme"] as const;
 
-    for (const p of queue) {
-      ui.log.info(`pushing ${p.meta.id.slice(0, 7)} "${p.meta.message}"`);
-      try {
-        await pushOne(connection, signer, cwd, cfg.repo, p);
-      } catch (e) {
-        ui.fail(
-          `failed at ${p.meta.id.slice(0, 7)}: ${(e as Error).message}\n` +
-            `re-run "iqgit push" to resume.`,
-        );
+export function register(program: Command): void {
+  program
+    .command("push")
+    .option(
+      "-s, --speed <preset>",
+      `upload speed preset (${SPEEDS.join("|")}); overrides config.speed`,
+    )
+    .action(async (opts: { speed?: string }) => {
+      const cwd = repo.findRepoRoot();
+      const cfg = repo.readConfig(cwd);
+      const queue = repo.listPending(cwd);
+      if (queue.length === 0) {
+        ui.log.info("nothing to push");
+        return;
       }
-      repo.writeHead(cwd, p.meta.id);
-      repo.discardPending(p);
-      ui.log.success(`  pushed ${p.meta.id.slice(0, 7)}`);
-    }
-  });
+      const speed = resolveSpeed(opts.speed);
+      const { signer, connection } = await setup();
+
+      for (const p of queue) {
+        ui.log.info(`pushing ${p.meta.id.slice(0, 7)} "${p.meta.message}"`);
+        try {
+          await pushOne(connection, signer, cwd, cfg.repo, p, speed);
+        } catch (e) {
+          ui.fail(
+            `failed at ${p.meta.id.slice(0, 7)}: ${(e as Error).message}\n` +
+              `re-run "iqgit push" to resume.`,
+          );
+        }
+        repo.writeHead(cwd, p.meta.id);
+        repo.discardPending(p);
+        ui.log.success(`  pushed ${p.meta.id.slice(0, 7)}`);
+      }
+    });
+}
+
+function resolveSpeed(flag: string | undefined): SessionSpeed | undefined {
+  const raw = flag ?? readGlobalConfig().speed;
+  if (!raw) return undefined;
+  if (!(SPEEDS as readonly string[]).includes(raw)) {
+    ui.fail(`invalid speed: ${raw}\nallowed: ${SPEEDS.join(", ")}`);
+  }
+  return raw as SessionSpeed;
 }
 
 async function pushOne(
@@ -74,6 +93,7 @@ async function pushOne(
   cwd: string,
   repoName: string,
   p: repo.PendingCommit,
+  speed: SessionSpeed | undefined,
 ): Promise<void> {
   const tree = repo.readPendingTree(p);
   const newTree: FileTree = {};
@@ -91,7 +111,7 @@ async function pushOne(
       reused++;
     } else {
       const base64 = repo.readPendingBlob(p, hash);
-      const { txId } = await uploadBlob(connection, signer, path, base64, {});
+      const { txId } = await uploadBlob(connection, signer, path, base64, {}, undefined, speed);
       repo.cacheSet(cwd, hash, { txId, uploadedAt: Date.now() });
       newTree[path] = { txId, hash };
     }
@@ -103,7 +123,7 @@ async function pushOne(
   // ---- 2. tree ----
   let treeTxId = p.meta.treeTxId;
   if (!treeTxId) {
-    treeTxId = await uploadTree(connection, signer, newTree);
+    treeTxId = await uploadTree(connection, signer, newTree, speed);
     repo.updatePendingMeta(p, { treeTxId });
   }
 

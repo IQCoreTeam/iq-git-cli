@@ -14,17 +14,19 @@ import type { Command } from "commander";
 import { readGlobalConfig, writeGlobalConfig } from "../setup";
 import * as ui from "../ui";
 
-const KNOWN_KEYS = ["walletPath", "rpcUrl"] as const;
+const KNOWN_KEYS = ["walletPath", "rpcUrl", "speed"] as const;
+const SPEED_VALUES = ["light", "medium", "heavy", "extreme"] as const;
 
 export function register(program: Command): void {
   program
     .command("config [key] [value]")
-    .description("get or set global config (keys: walletPath, rpcUrl)")
+    .description("get or set global config (keys: walletPath, rpcUrl, speed)")
     .addHelpText("after", `
 Examples:
   iqgit config                                  list all
   iqgit config rpcUrl                           print current RPC URL
   iqgit config rpcUrl "https://my-rpc.example"    change RPC URL
+  iqgit config speed heavy                      default push speed (light|medium|heavy|extreme)
   iqgit config --unset rpcUrl                   reset (re-prompts next run)`)
     .option("--unset <key>")
     .action((key: string | undefined, value: string | undefined, opts: { unset?: string }) => {
@@ -47,6 +49,9 @@ Examples:
       if (value === undefined) {
         ui.log.info(cfg[key] ?? "");
         return;
+      }
+      if (key === "speed" && !(SPEED_VALUES as readonly string[]).includes(value)) {
+        ui.fail(`invalid speed: ${value}\nallowed: ${SPEED_VALUES.join(", ")}`);
       }
       cfg[key] = value;
       writeGlobalConfig(cfg);

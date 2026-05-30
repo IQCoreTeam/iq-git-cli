@@ -32,6 +32,9 @@ const HELIUS_URL = "https://www.helius.dev/";
 interface GlobalConfig {
   walletPath?: string;
   rpcUrl?: string;
+  /** Default solana-sdk session speed used for blob/tree uploads on push.
+   *  Overridable per call with `iqgit push --speed <preset>`. */
+  speed?: "light" | "medium" | "heavy" | "extreme";
 }
 
 export interface SetupResult {

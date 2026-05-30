@@ -66,6 +66,20 @@ You can also override per-command via environment variable:
 SOLANA_RPC_ENDPOINT='https://my-rpc.example' iqgit log
 ```
 
+## Upload speed
+
+`iqgit push` forwards a speed preset to the solana-sdk's
+`SESSION_SPEED_PROFILES` (controls RPS + concurrency). Default is `light`,
+the Helius free-tier friendly setting. Bump it on a paid RPC for faster
+pushes:
+
+```bash
+iqgit config speed heavy                    # save as global default
+iqgit push --speed extreme                  # one-off override
+```
+
+Allowed values: `light` | `medium` | `heavy` | `extreme`.
+
 ## Gateway
 
 `log`, `registry`, `clone`, `status` (when fetching base tree), and
