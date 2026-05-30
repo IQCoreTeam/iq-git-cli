@@ -1,6 +1,6 @@
 {
   "name": "@iqlabs-official/iq-git-cli",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Command-line client for on-chain Git on Solana. Talks to @iqlabs-official/git-sdk to commit, push, clone, and browse repos stored entirely on chain.",
   "keywords": [
     "solana",
@@ -33,7 +33,7 @@
   },
   "dependencies": {
     "@inquirer/prompts": "^5.0.0",
-    "@iqlabs-official/git-sdk": "^0.1.11",
+    "@iqlabs-official/git-sdk": "^0.1.12",
     "@iqlabs-official/solana-sdk": "^0.1.27",
     "@solana/web3.js": "^1.98.0",
     "chalk": "^5.3.0",

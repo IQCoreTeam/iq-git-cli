@@ -68,17 +68,24 @@ SOLANA_RPC_ENDPOINT='https://my-rpc.example' iqgit log
 
 ## Upload speed
 
-`iqgit push` forwards a speed preset to the solana-sdk's
+`iqgit push` forwards a speed setting to the solana-sdk
 `SESSION_SPEED_PROFILES` (controls RPS + concurrency). Default is `light`,
-the Helius free-tier friendly setting. Bump it on a paid RPC for faster
-pushes:
+the Helius free-tier friendly preset. You can pick a preset name or dial
+raw values per-run and globally:
 
 ```bash
+# preset name
 iqgit config speed heavy                    # save as global default
 iqgit push --speed extreme                  # one-off override
+
+# raw dials (win over the preset; any subset works)
+iqgit config rps 80                         # global default maxRps
+iqgit push --rps 120 --concurrency-upload 30
 ```
 
-Allowed values: `light` | `medium` | `heavy` | `extreme`.
+Available presets: `light` | `medium` | `heavy` | `extreme`. Raw flags:
+`--rps`, `--concurrency`, `--concurrency-upload`. Config keys mirror them:
+`rps`, `concurrency`, `concurrencyUpload`.
 
 ## Gateway
 

@@ -43,6 +43,13 @@ import * as ui from "../ui";
 
 const SPEEDS = ["light", "medium", "heavy", "extreme"] as const;
 
+interface PushOpts {
+  speed?: string;
+  rps?: string;
+  concurrency?: string;
+  concurrencyUpload?: string;
+}
+
 export function register(program: Command): void {
   program
     .command("push")
@@ -50,7 +57,19 @@ export function register(program: Command): void {
       "-s, --speed <preset>",
       `upload speed preset (${SPEEDS.join("|")}); overrides config.speed`,
     )
-    .action(async (opts: { speed?: string }) => {
+    .option(
+      "--rps <n>",
+      "raw maxRps override (wins over preset for this run)",
+    )
+    .option(
+      "--concurrency <n>",
+      "raw maxConcurrency override",
+    )
+    .option(
+      "--concurrency-upload <n>",
+      "raw maxConcurrencyUpload override (chunk-fanout concurrency)",
+    )
+    .action(async (opts: PushOpts) => {
       const cwd = repo.findRepoRoot();
       const cfg = repo.readConfig(cwd);
       const queue = repo.listPending(cwd);
@@ -58,7 +77,7 @@ export function register(program: Command): void {
         ui.log.info("nothing to push");
         return;
       }
-      const speed = resolveSpeed(opts.speed);
+      const speed = resolveSpeed(opts);
       const { signer, connection } = await setup();
 
       for (const p of queue) {
@@ -78,13 +97,41 @@ export function register(program: Command): void {
     });
 }
 
-function resolveSpeed(flag: string | undefined): SessionSpeed | undefined {
-  const raw = flag ?? readGlobalConfig().speed;
+function resolveSpeed(opts: PushOpts): SessionSpeed | undefined {
+  const cfg = readGlobalConfig();
+  // Raw dial overrides build an object; missing keys fall back to whatever
+  // preset is active (CLI flag → config.speed → SDK default).
+  const overrides = parseRawOverrides(opts, cfg);
+  if (overrides) return overrides;
+
+  const raw = opts.speed ?? cfg.speed;
   if (!raw) return undefined;
   if (!(SPEEDS as readonly string[]).includes(raw)) {
     ui.fail(`invalid speed: ${raw}\nallowed: ${SPEEDS.join(", ")}`);
   }
   return raw as SessionSpeed;
+}
+
+function parseRawOverrides(
+  opts: PushOpts,
+  cfg: ReturnType<typeof readGlobalConfig>,
+): SessionSpeed | undefined {
+  const out: { maxRps?: number; maxConcurrency?: number; maxConcurrencyUpload?: number } = {};
+  const flagRps = opts.rps ?? cfg.rps;
+  const flagCc = opts.concurrency ?? cfg.concurrency;
+  const flagCcu = opts.concurrencyUpload ?? cfg.concurrencyUpload;
+  if (flagRps !== undefined) out.maxRps = parsePositiveInt("rps", flagRps);
+  if (flagCc !== undefined) out.maxConcurrency = parsePositiveInt("concurrency", flagCc);
+  if (flagCcu !== undefined) out.maxConcurrencyUpload = parsePositiveInt("concurrency-upload", flagCcu);
+  return Object.keys(out).length === 0 ? undefined : out;
+}
+
+function parsePositiveInt(name: string, raw: string | number): number {
+  const n = typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isFinite(n) || n <= 0 || !Number.isInteger(n)) {
+    ui.fail(`invalid ${name}: ${raw} (must be a positive integer)`);
+  }
+  return n;
 }
 
 async function pushOne(

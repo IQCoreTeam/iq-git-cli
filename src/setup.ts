@@ -35,6 +35,11 @@ interface GlobalConfig {
   /** Default solana-sdk session speed used for blob/tree uploads on push.
    *  Overridable per call with `iqgit push --speed <preset>`. */
   speed?: "light" | "medium" | "heavy" | "extreme";
+  /** Optional raw dials that override the preset. Stored as strings (config
+   *  comes from string CLI input); parsed to numbers when push reads them. */
+  rps?: string;
+  concurrency?: string;
+  concurrencyUpload?: string;
 }
 
 export interface SetupResult {
