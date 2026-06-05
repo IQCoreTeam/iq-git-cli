@@ -11,6 +11,9 @@ iqgit add .
 iqgit commit -m "first"
 iqgit push
 
+# publish it as a live site (on-chain hosting)
+iqgit pages deploy
+
 # read someone else's (no wallet needed)
 iqgit clone <owner>/<repo>
 iqgit log
@@ -106,6 +109,28 @@ how blockchan's frontend resolves chain reads.
 Anyone can run their own gateway. See
 [iq-gateway](https://github.com/IQCoreTeam/iq-gateway).
 
+## Pages
+
+`iqgit pages deploy` publishes a repo as a live site — the on-chain
+equivalent of enabling GitHub Pages. Commit an `iqpages.json` manifest at
+the repo root first:
+
+```json
+{ "name": "my-app", "version": "1.0.0", "description": "...", "entry": "index.html" }
+```
+
+```bash
+iqgit add iqpages.json && iqgit commit -m "add pages manifest" && iqgit push
+iqgit pages deploy        # registers the deploy + one-time fee
+iqgit pages status        # prints the live URL once deployed
+```
+
+Deploy writes one marker row to the shared `iqpages-root/deployed` gallery
+plus a one-time fee; it's a no-op if the repo is already deployed. Nothing
+is re-uploaded — the site is served live from the repo's **latest commit
+tree** at `<gateway>/site/<treeTxId>/<entry>`, so a later `push` updates
+the site with no re-deploy. `status` is read-only and needs no wallet.
+
 ## Commands
 
 | Command | Description |
@@ -121,6 +146,8 @@ Anyone can run their own gateway. See
 | `iqgit log [--limit N] [--owner ... --repo ...]` | Print commit history. |
 | `iqgit status` | 4-tier diff: HEAD, pending commits, staged index, working tree. |
 | `iqgit registry [--limit N]` | Browse the public on-chain repo gallery. |
+| `iqgit pages deploy` | Publish this repo to iq-pages (on-chain hosting). No-op if already deployed. |
+| `iqgit pages status` | Show whether this repo is deployed and print its live URL. Read-only. |
 | `iqgit config [key] [value]` | Get or set global config. |
 | `iqgit wallet new\|show\|balance\|repos` | Manage keypair. |
 
@@ -201,7 +228,7 @@ src/
 │   └── gateway.ts      # gateway-first reads with RPC fallback
 └── commands/           # one file per CLI command
                         # (init, create, add, reset, commit, push, clone,
-                        #  restore, log, status, registry, config, wallet)
+                        #  restore, log, status, registry, pages, config, wallet)
 ```
 
 ## License

@@ -19,6 +19,7 @@ import { register as statusCmd } from "./commands/status";
 import { register as registryCmd } from "./commands/registry";
 import { register as configCmd } from "./commands/config";
 import { register as walletCmd } from "./commands/wallet";
+import { register as pagesCmd } from "./commands/pages";
 
 const program = new Command("iqgit")
   .description("On-chain Git for Solana")
@@ -37,5 +38,6 @@ statusCmd(program);
 registryCmd(program);
 configCmd(program);
 walletCmd(program);
+pagesCmd(program);
 
 program.parseAsync(process.argv);
