@@ -42,7 +42,7 @@
     "ora": "^8.0.0"
   },
   "devDependencies": {
-    "@iqlabs-official/git-sdk": "^0.1.14",
+    "@iqlabs-official/git-sdk": "file:../iqlabs-git-sdk",
     "@types/node": "^20.11.0",
     "tsup": "^8.0.0",
     "typescript": "^5.4.0"
