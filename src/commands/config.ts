@@ -17,6 +17,7 @@ import * as ui from "../ui";
 const KNOWN_KEYS = [
   "walletPath",
   "rpcUrl",
+  "network",
   "speed",
   "rps",
   "concurrency",
@@ -28,7 +29,7 @@ const POSITIVE_INT_KEYS = new Set(["rps", "concurrency", "concurrencyUpload"]);
 export function register(program: Command): void {
   program
     .command("config [key] [value]")
-    .description("get or set global config (keys: walletPath, rpcUrl, speed, rps, concurrency, concurrencyUpload)")
+    .description("get or set global config (keys: walletPath, rpcUrl, network, speed, rps, concurrency, concurrencyUpload)")
     .addHelpText("after", `
 Examples:
   iqgit config                                  list all
@@ -37,7 +38,9 @@ Examples:
   iqgit config speed heavy                      default push preset (light|medium|heavy|extreme)
   iqgit config rps 80                           raw maxRps override (wins over preset)
   iqgit config concurrencyUpload 30             raw maxConcurrencyUpload override
-  iqgit config --unset rpcUrl                   reset (re-prompts next run)`)
+  iqgit config --unset rpcUrl                   reset (re-prompts next run)
+  iqgit config network eth                      default to EVM (sepolia)
+  iqgit config network mainnet                  back to Solana mainnet`)
     .option("--unset <key>")
     .action((key: string | undefined, value: string | undefined, opts: { unset?: string }) => {
       const cfg = readGlobalConfig() as Record<string, string | undefined>;

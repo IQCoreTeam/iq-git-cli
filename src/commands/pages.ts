@@ -17,12 +17,21 @@
 
 import type { Command } from "commander";
 import {
-  deployPages,
-  isPagesDeployed,
   readLatestCommit,
-  commitTablePda,
-  readPagesConfig,
+  commitTableRef,
 } from "@iqlabs-official/git-sdk/node";
+
+// deployPages / isPagesDeployed / readPagesConfig are planned git-sdk 0.1.13
+// features not yet shipped. Stubbed here until the SDK layer ships.
+async function deployPages(_connection: unknown, _signer: unknown, _repoName: string): Promise<void> {
+  throw new Error("iqgit pages: not yet available — requires git-sdk 0.1.13");
+}
+async function isPagesDeployed(_owner: string, _repoName: string): Promise<boolean> {
+  throw new Error("iqgit pages: not yet available — requires git-sdk 0.1.13");
+}
+async function readPagesConfig(_owner: string, _repoName: string): Promise<{ entry: string } | null> {
+  throw new Error("iqgit pages: not yet available — requires git-sdk 0.1.13");
+}
 import chalk from "chalk";
 import * as repo from "../core/repo";
 import { setup, setupReadOnly } from "../setup";
@@ -98,7 +107,7 @@ async function statusAction(): Promise<void> {
 // want a missing-config edge case to mask a successful deploy.
 async function printSiteUrl(owner: string, repoName: string): Promise<void> {
   const [latest, config] = await Promise.all([
-    readLatestCommit(commitTablePda(owner, repoName)),
+    readLatestCommit(commitTableRef(owner, repoName)),
     readPagesConfig(owner, repoName),
   ]);
   if (!latest || !config) return;

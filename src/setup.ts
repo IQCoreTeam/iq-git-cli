@@ -19,7 +19,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { Connection, Keypair, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import iqlabs from "@iqlabs-official/solana-sdk";
-import { GitClient } from "@iqlabs-official/git-sdk/node";
+import { GitClient, setNetwork, type NetworkToken } from "@iqlabs-official/git-sdk/node";
 import { config as loadEnv } from "dotenv";
 import * as ui from "./ui";
 
@@ -32,6 +32,9 @@ const HELIUS_URL = "https://www.helius.dev/";
 interface GlobalConfig {
   walletPath?: string;
   rpcUrl?: string;
+  /** Active chain/network (devnet|mainnet|eth|sepolia|monad|monadTestnet).
+   *  Overridden by IQGIT_NETWORK env or --network flag at runtime. */
+  network?: NetworkToken;
   /** Default solana-sdk session speed used for blob/tree uploads on push.
    *  Overridable per call with `iqgit push --speed <preset>`. */
   speed?: "light" | "medium" | "heavy" | "extreme";
@@ -52,6 +55,8 @@ export async function setup(): Promise<SetupResult> {
   mkdirSync(HOME_DIR, { recursive: true });
   loadEnv({ path: ENV_PATH });
 
+  applyNetwork();
+
   const signer = await loadOrCreateWallet();
   const rpcUrl = await loadOrPromptRpc();
   iqlabs.setRpcUrl(rpcUrl);
@@ -70,9 +75,21 @@ export async function setup(): Promise<SetupResult> {
 export async function setupReadOnly(): Promise<Connection> {
   mkdirSync(HOME_DIR, { recursive: true });
   loadEnv({ path: ENV_PATH });
+  applyNetwork();
   const rpcUrl = await loadOrPromptRpc();
   iqlabs.setRpcUrl(rpcUrl);
   return new Connection(rpcUrl, "confirmed");
+}
+
+/** Apply the active network from --network flag > IQGIT_NETWORK env > config.
+ *  Called by both setup() and setupReadOnly(). Routes the SDK's read/write
+ *  path to the right chain without changing wallet or RPC wiring (those remain
+ *  Solana for now; EVM writes use EthClientConfig in a future flow). */
+function applyNetwork(): void {
+  // Precedence: flag already set on process.env by cli.ts preAction hook,
+  // then the .env file loaded above, then config.json.
+  const token = (process.env.IQGIT_NETWORK ?? readGlobalConfig().network) as NetworkToken | undefined;
+  if (token) setNetwork(token);
 }
 
 async function loadOrCreateWallet(): Promise<Keypair> {

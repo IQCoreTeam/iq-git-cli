@@ -21,9 +21,19 @@ import { register as configCmd } from "./commands/config";
 import { register as walletCmd } from "./commands/wallet";
 import { register as pagesCmd } from "./commands/pages";
 
+const NETWORKS = "devnet|mainnet|eth|sepolia|monad|monadTestnet";
+
 const program = new Command("iqgit")
-  .description("On-chain Git for Solana")
-  .version("0.1.0");
+  .description("On-chain Git for Solana and EVM")
+  .version("0.1.0")
+  .option(
+    "-n, --network <token>",
+    `chain/network to use (${NETWORKS}); overrides IQGIT_NETWORK and config.network`,
+  )
+  .hook("preAction", () => {
+    const token = program.opts().network as string | undefined;
+    if (token) process.env.IQGIT_NETWORK = token;
+  });
 
 initCmd(program);
 createCmd(program);
