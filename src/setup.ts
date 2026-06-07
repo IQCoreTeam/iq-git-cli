@@ -110,7 +110,10 @@ async function setupEvm(network: EthNetwork): Promise<SetupResult> {
   const address = await wallet.getAddress();
   ui.log.info(`EVM wallet: ${address} (${network})`);
   return {
-    client: new GitClient({ chain: "eth", signer: wallet, network }),
+    // Pass rpcUrl so the SDK's reader uses the same node as our write provider
+    // — mirrors the Solana path's iqlabs.setRpcUrl() sync. Without it the SDK
+    // falls back to ethereum-sdk's default RPC, splitting read vs write nodes.
+    client: new GitClient({ chain: "eth", signer: wallet, network, rpcUrl }),
     signer: wallet,
     connection: null,
     chain: "eth",
