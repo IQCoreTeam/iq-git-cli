@@ -32,6 +32,10 @@ export const DEFAULT_WALLET = join(HOME_DIR, "wallets", "default.json");
 const HELIUS_URL = "https://www.helius.dev/";
 
 const EVM_TOKENS = new Set<string>(["eth", "sepolia", "monad", "monadTestnet"]);
+const SOLANA_TOKENS = new Set<string>(["devnet", "mainnet"]);
+
+/** Every token `network` accepts, for validation + help listing. */
+export const NETWORK_TOKENS = [...SOLANA_TOKENS, ...EVM_TOKENS] as readonly string[];
 
 const EVM_DEFAULT_RPCS: Record<EthNetwork, string> = {
   sepolia: "https://ethereum-sepolia-rpc.publicnode.com",
@@ -39,8 +43,56 @@ const EVM_DEFAULT_RPCS: Record<EthNetwork, string> = {
   monadTestnet: "https://testnet-rpc.monad.xyz",
 };
 
+// `eth` is the alias for the EVM default (sepolia) — normalize before resolving
+// an RPC or expected chainId.
+function resolveEthNetwork(token: string): EthNetwork {
+  return (token === "eth" ? "sepolia" : token) as EthNetwork;
+}
+
 function activeToken(): NetworkToken | undefined {
   return (process.env.IQGIT_NETWORK ?? readGlobalConfig().network) as NetworkToken | undefined;
+}
+
+/** Reject an unknown network token before it lands in config (a typo like
+ *  `ethh` would otherwise persist and break the next command). */
+export function validateNetworkToken(token: string): void {
+  if (!NETWORK_TOKENS.includes(token)) {
+    ui.fail(`unknown network: ${token}\nallowed: ${NETWORK_TOKENS.join(", ")}`);
+  }
+}
+
+/** Verify the token's RPC is reachable and serving the right chain. EVM:
+ *  setNetwork + assertChainMatches (chainId check). Solana: a getLatestBlockhash
+ *  health ping against the configured RPC (no chainId concept). Throws on
+ *  mismatch/unreachable so the caller can surface it and not persist a dead
+ *  config. (Throws plain Error rather than ui.fail() so a caller managing a
+ *  spinner can render the failure before exiting.) */
+export async function verifyNetworkRpc(token: string, rpcOverride?: string): Promise<void> {
+  if (EVM_TOKENS.has(token)) {
+    const net = resolveEthNetwork(token);
+    const rpcUrl = rpcOverride ?? process.env.EVM_RPC_URL ?? EVM_DEFAULT_RPCS[net];
+    setNetwork(net, { rpcUrl });
+    try {
+      // Dynamic import keeps ethereum-sdk out of the Solana-only code path.
+      const { assertChainMatches } = await import("@iqlabs-official/ethereum-sdk");
+      const provider = new JsonRpcProvider(rpcUrl);
+      await assertChainMatches(provider);
+    } catch (e) {
+      throw new Error(`EVM RPC check failed for ${token} (${rpcUrl}): ${(e as Error).message}`);
+    }
+    return;
+  }
+  // Solana: ping the RPC the next command would use.
+  const url = rpcOverride ?? process.env.SOLANA_RPC_ENDPOINT ?? readGlobalConfig().rpcUrl;
+  if (!url) {
+    ui.log.warn("No Solana RPC configured yet — it will be requested on first use.");
+    return;
+  }
+  try {
+    await new Connection(url, "confirmed").getLatestBlockhash();
+  } catch (e) {
+    throw new Error(`Solana RPC check failed (${url}): ${(e as Error).message}`);
+  }
 }
 
 function isEvmToken(token: string | undefined): token is EthNetwork {
