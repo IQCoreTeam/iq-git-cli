@@ -8,8 +8,10 @@
 //   pages status   show whether the repo is deployed and, if so, its live URL.
 //
 //   sdk: deployPages / isPagesDeployed / readPagesConfig from the git-sdk
-//        pages layer (0.1.13+). All the on-chain logic lives there; this file
-//        only does repo-config resolution + terminal output.
+//        pages layer (0.1.15+). All the on-chain logic lives there; this file
+//        only does repo-config resolution + terminal output. The pages layer
+//        is chain-neutral, so deploy works on Solana and EVM alike — the fee is
+//        charged in the active chain's native currency by the SDK.
 //
 // deploy is a write → setup() (wallet gate). status is read-only →
 // setupReadOnly(), and reads owner/repo from .iqgit/config.json without a
@@ -17,10 +19,10 @@
 
 import type { Command } from "commander";
 import {
+  readLatestCommit,
+  commitTableRef,
   deployPages,
   isPagesDeployed,
-  readLatestCommit,
-  commitTablePda,
   readPagesConfig,
 } from "@iqlabs-official/git-sdk/node";
 import chalk from "chalk";
@@ -55,8 +57,8 @@ async function deployAction(): Promise<void> {
   const { repo: repoName } = repo.readConfig(cwd);
   if (!repoName) ui.fail('no repo here — run "iqgit create <name>" first');
 
-  const { signer, connection } = await setup();
-  const owner = signer.publicKey.toBase58();
+  const { signer, address } = await setup();
+  const owner = address;
 
   if (await isPagesDeployed(owner, repoName)) {
     ui.log.success(`Already deployed: ${owner}/${repoName}`);
@@ -66,7 +68,7 @@ async function deployAction(): Promise<void> {
 
   const sp = ui.spinner(`Deploying ${repoName} to iq-pages...`).start();
   try {
-    await deployPages(connection, signer, repoName);
+    await deployPages(signer, repoName);
     sp.succeed(`Deployed ${owner}/${repoName}`);
   } catch (e) {
     sp.fail((e as Error).message);
@@ -98,7 +100,7 @@ async function statusAction(): Promise<void> {
 // want a missing-config edge case to mask a successful deploy.
 async function printSiteUrl(owner: string, repoName: string): Promise<void> {
   const [latest, config] = await Promise.all([
-    readLatestCommit(commitTablePda(owner, repoName)),
+    readLatestCommit(commitTableRef(owner, repoName)),
     readPagesConfig(owner, repoName),
   ]);
   if (!latest || !config) return;

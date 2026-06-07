@@ -12,7 +12,7 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import type { Command } from "commander";
-import { Keypair, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { Connection, Keypair, LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import { IQGIT_ROOT_ID, repoListHint } from "@iqlabs-official/git-sdk/node";
 import { getDbRootPda, getTablePda } from "@iqlabs-official/solana-sdk/contract";
 import { toSeedBytes } from "@iqlabs-official/solana-sdk/utils";
@@ -60,16 +60,24 @@ function walletShow(): void {
 }
 
 async function walletBalance(): Promise<void> {
-  const { signer, connection } = await setup();
-  const lamports = await connection.getBalance(signer.publicKey);
-  ui.log.info(signer.publicKey.toBase58());
+  const { connection, chain, address } = await setup();
+  if (chain === "eth") {
+    ui.log.info(address);
+    ui.log.info("(EVM wallet — check ETH balance on a block explorer)");
+    return;
+  }
+  const lamports = await (connection as Connection).getBalance(new PublicKey(address));
+  ui.log.info(address);
   ui.log.info(`${lamports / LAMPORTS_PER_SOL} SOL`);
 }
 
 async function walletRepos(): Promise<void> {
-  const { signer } = await setup();
+  const { chain, address } = await setup();
+  if (chain === "eth") {
+    ui.fail("iqgit wallet repos: not supported on EVM yet");
+  }
   // Gateway-first read of git_repos_v2_<owner>; falls through to RPC.
-  const owner = signer.publicKey.toBase58();
+  const owner = address;
   const dbRoot = getDbRootPda(toSeedBytes(IQGIT_ROOT_ID));
   const tablePda = getTablePda(dbRoot, toSeedBytes(repoListHint(owner)));
   const repos = (await gwFetchAllRows(tablePda.toBase58(), 200)) as Array<{

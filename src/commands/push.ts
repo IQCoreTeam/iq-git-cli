@@ -22,10 +22,9 @@
 //     the pending dir. If we crash between those two, next push sees
 //     committedSig present and just cleans up + advances HEAD.
 
-import type { Connection, Keypair } from "@solana/web3.js";
+import type { GitSigner } from "@iqlabs-official/git-sdk";
 import type { Command } from "commander";
-import { IQGIT_ROOT_ID,
-  commitTableHint,
+import {
   uploadBlob,
   uploadTree,
   writeCommit,
@@ -33,9 +32,6 @@ import { IQGIT_ROOT_ID,
   type FileTree,
   type SessionSpeed,
 } from "@iqlabs-official/git-sdk/node";
-import { getDbRootPda, getTablePda } from "@iqlabs-official/solana-sdk/contract";
-import { toSeedBytes } from "@iqlabs-official/solana-sdk/utils";
-import { gwNotify } from "../core/gateway";
 
 import * as repo from "../core/repo";
 import { readGlobalConfig, setup } from "../setup";
@@ -78,12 +74,12 @@ export function register(program: Command): void {
         return;
       }
       const speed = resolveSpeed(opts);
-      const { signer, connection } = await setup();
+      const { signer } = await setup();
 
       for (const p of queue) {
         ui.log.info(`pushing ${p.meta.id.slice(0, 7)} "${p.meta.message}"`);
         try {
-          await pushOne(connection, signer, cwd, cfg.repo, p, speed);
+          await pushOne(signer, cwd, cfg.repo, p, speed);
         } catch (e) {
           ui.fail(
             `failed at ${p.meta.id.slice(0, 7)}: ${(e as Error).message}\n` +
@@ -135,8 +131,7 @@ function parsePositiveInt(name: string, raw: string | number): number {
 }
 
 async function pushOne(
-  connection: Connection,
-  signer: Keypair,
+  signer: GitSigner,
   cwd: string,
   repoName: string,
   p: repo.PendingCommit,
@@ -158,7 +153,7 @@ async function pushOne(
       reused++;
     } else {
       const base64 = repo.readPendingBlob(p, hash);
-      const { txId } = await uploadBlob(connection, signer, path, base64, {}, undefined, speed);
+      const { txId } = await uploadBlob(signer, path, base64, {}, undefined, speed);
       repo.cacheSet(cwd, hash, { txId, uploadedAt: Date.now() });
       newTree[path] = { txId, hash };
     }
@@ -170,7 +165,7 @@ async function pushOne(
   // ---- 2. tree ----
   let treeTxId = p.meta.treeTxId;
   if (!treeTxId) {
-    treeTxId = await uploadTree(connection, signer, newTree, speed);
+    treeTxId = await uploadTree(signer, newTree, speed);
     repo.updatePendingMeta(p, { treeTxId });
   }
 
@@ -184,12 +179,8 @@ async function pushOne(
       timestamp: p.meta.timestamp,
       author: p.meta.author,
     };
-    const sig = await writeCommit(connection, signer, repoName, commit);
+    const sig = await writeCommit(signer, repoName, commit);
     repo.updatePendingMeta(p, { committedSig: sig });
-    // Cache warm hint to gateway — fire-and-forget, gateway will pull tx
-    // on its own anyway.
-    const dbRoot = getDbRootPda(toSeedBytes(IQGIT_ROOT_ID));
-    const tablePda = getTablePda(dbRoot, toSeedBytes(commitTableHint(commit.author, repoName)));
-    void gwNotify(tablePda.toBase58(), sig, undefined, signer.publicKey.toBase58());
+    // SDK's writeCommit already calls notifyGateways internally.
   }
 }

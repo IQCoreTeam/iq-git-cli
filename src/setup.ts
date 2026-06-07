@@ -18,8 +18,10 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { Connection, Keypair, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { JsonRpcProvider, Wallet as EthWallet } from "ethers";
 import iqlabs from "@iqlabs-official/solana-sdk";
-import { GitClient } from "@iqlabs-official/git-sdk/node";
+import { GitClient, setNetwork, type NetworkToken, type EthNetwork } from "@iqlabs-official/git-sdk/node";
+import type { GitSigner } from "@iqlabs-official/git-sdk";
 import { config as loadEnv } from "dotenv";
 import * as ui from "./ui";
 
@@ -29,9 +31,83 @@ const CONFIG_PATH = join(HOME_DIR, "config.json");
 export const DEFAULT_WALLET = join(HOME_DIR, "wallets", "default.json");
 const HELIUS_URL = "https://www.helius.dev/";
 
+const EVM_TOKENS = new Set<string>(["eth", "sepolia", "monad", "monadTestnet"]);
+const SOLANA_TOKENS = new Set<string>(["devnet", "mainnet"]);
+
+/** Every token `network` accepts, for validation + help listing. */
+export const NETWORK_TOKENS = [...SOLANA_TOKENS, ...EVM_TOKENS] as readonly string[];
+
+const EVM_DEFAULT_RPCS: Record<EthNetwork, string> = {
+  sepolia: "https://ethereum-sepolia-rpc.publicnode.com",
+  monad: "https://rpc.monad.xyz",
+  monadTestnet: "https://testnet-rpc.monad.xyz",
+};
+
+// `eth` is the alias for the EVM default (sepolia) — normalize before resolving
+// an RPC or expected chainId.
+function resolveEthNetwork(token: string): EthNetwork {
+  return (token === "eth" ? "sepolia" : token) as EthNetwork;
+}
+
+function activeToken(): NetworkToken | undefined {
+  return (process.env.IQGIT_NETWORK ?? readGlobalConfig().network) as NetworkToken | undefined;
+}
+
+/** Reject an unknown network token before it lands in config (a typo like
+ *  `ethh` would otherwise persist and break the next command). */
+export function validateNetworkToken(token: string): void {
+  if (!NETWORK_TOKENS.includes(token)) {
+    ui.fail(`unknown network: ${token}\nallowed: ${NETWORK_TOKENS.join(", ")}`);
+  }
+}
+
+/** Verify the token's RPC is reachable and serving the right chain. EVM:
+ *  setNetwork + assertChainMatches (chainId check). Solana: a getLatestBlockhash
+ *  health ping against the configured RPC (no chainId concept). Throws on
+ *  mismatch/unreachable so the caller can surface it and not persist a dead
+ *  config. (Throws plain Error rather than ui.fail() so a caller managing a
+ *  spinner can render the failure before exiting.) */
+export async function verifyNetworkRpc(token: string, rpcOverride?: string): Promise<void> {
+  if (EVM_TOKENS.has(token)) {
+    const net = resolveEthNetwork(token);
+    const rpcUrl = rpcOverride ?? process.env.EVM_RPC_URL ?? EVM_DEFAULT_RPCS[net];
+    setNetwork(net, { rpcUrl });
+    try {
+      // Dynamic import keeps ethereum-sdk out of the Solana-only code path.
+      const { assertChainMatches } = await import("@iqlabs-official/ethereum-sdk");
+      const provider = new JsonRpcProvider(rpcUrl);
+      await assertChainMatches(provider);
+    } catch (e) {
+      throw new Error(`EVM RPC check failed for ${token} (${rpcUrl}): ${(e as Error).message}`);
+    }
+    return;
+  }
+  // Solana: ping the RPC the next command would use.
+  const url = rpcOverride ?? process.env.SOLANA_RPC_ENDPOINT ?? readGlobalConfig().rpcUrl;
+  if (!url) {
+    ui.log.warn("No Solana RPC configured yet — it will be requested on first use.");
+    return;
+  }
+  try {
+    await new Connection(url, "confirmed").getLatestBlockhash();
+  } catch (e) {
+    throw new Error(`Solana RPC check failed (${url}): ${(e as Error).message}`);
+  }
+}
+
+function isEvmToken(token: string | undefined): token is EthNetwork {
+  return !!token && EVM_TOKENS.has(token);
+}
+
 interface GlobalConfig {
   walletPath?: string;
   rpcUrl?: string;
+  /** Active chain/network (devnet|mainnet|eth|sepolia|monad|monadTestnet).
+   *  Overridden by IQGIT_NETWORK env or --network flag at runtime. */
+  network?: NetworkToken;
+  /** EVM private key (hex, 0x-prefixed or bare). Read from EVM_PRIVATE_KEY env
+   *  or stored here; never stored in plaintext on shared systems. */
+  evmPrivateKey?: string;
   /** Default solana-sdk session speed used for blob/tree uploads on push.
    *  Overridable per call with `iqgit push --speed <preset>`. */
   speed?: "light" | "medium" | "heavy" | "extreme";
@@ -44,22 +120,68 @@ interface GlobalConfig {
 
 export interface SetupResult {
   client: GitClient;
-  signer: Keypair;
-  connection: Connection;
+  signer: GitSigner;
+  /** Null on EVM — no Solana connection needed. */
+  connection: Connection | null;
+  chain: "solana" | "eth";
+  /** Resolved signer address (base58 for Solana, 0x for EVM). */
+  address: string;
 }
 
 export async function setup(): Promise<SetupResult> {
   mkdirSync(HOME_DIR, { recursive: true });
   loadEnv({ path: ENV_PATH });
+  applyNetwork();
 
+  const token = activeToken();
+  if (isEvmToken(token)) return setupEvm(token);
+  return setupSolana();
+}
+
+async function setupSolana(): Promise<SetupResult> {
   const signer = await loadOrCreateWallet();
   const rpcUrl = await loadOrPromptRpc();
   iqlabs.setRpcUrl(rpcUrl);
   const connection = new Connection(rpcUrl, "confirmed");
   await healthCheck(connection);
   await maybeWarnBalance(connection, signer);
+  return {
+    client: new GitClient({ connection, signer }),
+    signer,
+    connection,
+    chain: "solana",
+    address: signer.publicKey.toBase58(),
+  };
+}
 
-  return { client: new GitClient({ connection, signer }), signer, connection };
+async function setupEvm(network: EthNetwork): Promise<SetupResult> {
+  const privateKey = await loadOrPromptEvmKey();
+  const rpcUrl = process.env.EVM_RPC_URL ?? EVM_DEFAULT_RPCS[network];
+  const provider = new JsonRpcProvider(rpcUrl);
+  const wallet = new EthWallet(privateKey, provider);
+  const address = await wallet.getAddress();
+  ui.log.info(`EVM wallet: ${address} (${network})`);
+  return {
+    // Pass rpcUrl so the SDK's reader uses the same node as our write provider
+    // — mirrors the Solana path's iqlabs.setRpcUrl() sync. Without it the SDK
+    // falls back to ethereum-sdk's default RPC, splitting read vs write nodes.
+    client: new GitClient({ chain: "eth", signer: wallet, network, rpcUrl }),
+    signer: wallet,
+    connection: null,
+    chain: "eth",
+    address,
+  };
+}
+
+async function loadOrPromptEvmKey(): Promise<string> {
+  const env = process.env.EVM_PRIVATE_KEY;
+  if (env) return env;
+  const cfg = readGlobalConfig();
+  if (cfg.evmPrivateKey) return cfg.evmPrivateKey;
+  ui.log.warn("No EVM private key configured.");
+  const key = await ui.input({ message: "Paste your EVM private key (hex):" });
+  writeGlobalConfig({ ...cfg, evmPrivateKey: key });
+  return key;
 }
 
 // Read-only path for commands that only need to fetch from chain
@@ -70,9 +192,21 @@ export async function setup(): Promise<SetupResult> {
 export async function setupReadOnly(): Promise<Connection> {
   mkdirSync(HOME_DIR, { recursive: true });
   loadEnv({ path: ENV_PATH });
+  applyNetwork();
   const rpcUrl = await loadOrPromptRpc();
   iqlabs.setRpcUrl(rpcUrl);
   return new Connection(rpcUrl, "confirmed");
+}
+
+/** Apply the active network from --network flag > IQGIT_NETWORK env > config.
+ *  Called by both setup() and setupReadOnly(). Routes the SDK's read/write
+ *  path to the right chain without changing wallet or RPC wiring (those remain
+ *  Solana for now; EVM writes use EthClientConfig in a future flow). */
+function applyNetwork(): void {
+  // Precedence: flag already set on process.env by cli.ts preAction hook,
+  // then the .env file loaded above, then config.json.
+  const token = (process.env.IQGIT_NETWORK ?? readGlobalConfig().network) as NetworkToken | undefined;
+  if (token) setNetwork(token);
 }
 
 async function loadOrCreateWallet(): Promise<Keypair> {

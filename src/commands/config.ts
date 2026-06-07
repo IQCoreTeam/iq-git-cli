@@ -11,12 +11,19 @@
 //   out: stdout
 
 import type { Command } from "commander";
-import { readGlobalConfig, writeGlobalConfig } from "../setup";
+import {
+  readGlobalConfig,
+  writeGlobalConfig,
+  validateNetworkToken,
+  verifyNetworkRpc,
+} from "../setup";
 import * as ui from "../ui";
 
 const KNOWN_KEYS = [
   "walletPath",
   "rpcUrl",
+  "network",
+  "evmPrivateKey",
   "speed",
   "rps",
   "concurrency",
@@ -28,7 +35,7 @@ const POSITIVE_INT_KEYS = new Set(["rps", "concurrency", "concurrencyUpload"]);
 export function register(program: Command): void {
   program
     .command("config [key] [value]")
-    .description("get or set global config (keys: walletPath, rpcUrl, speed, rps, concurrency, concurrencyUpload)")
+    .description("get or set global config (keys: walletPath, rpcUrl, network, speed, rps, concurrency, concurrencyUpload)")
     .addHelpText("after", `
 Examples:
   iqgit config                                  list all
@@ -37,9 +44,11 @@ Examples:
   iqgit config speed heavy                      default push preset (light|medium|heavy|extreme)
   iqgit config rps 80                           raw maxRps override (wins over preset)
   iqgit config concurrencyUpload 30             raw maxConcurrencyUpload override
-  iqgit config --unset rpcUrl                   reset (re-prompts next run)`)
+  iqgit config --unset rpcUrl                   reset (re-prompts next run)
+  iqgit config network eth                      default to EVM (sepolia)
+  iqgit config network mainnet                  back to Solana mainnet`)
     .option("--unset <key>")
-    .action((key: string | undefined, value: string | undefined, opts: { unset?: string }) => {
+    .action(async (key: string | undefined, value: string | undefined, opts: { unset?: string }) => {
       const cfg = readGlobalConfig() as Record<string, string | undefined>;
 
       if (opts.unset) {
@@ -67,6 +76,20 @@ Examples:
         const n = Number(value);
         if (!Number.isInteger(n) || n <= 0) {
           ui.fail(`invalid ${key}: ${value} (must be a positive integer)`);
+        }
+      }
+      if (key === "network") {
+        // Reject typos, then confirm the RPC is live and serving that chain
+        // before persisting — a bad network would otherwise break every later
+        // command. ui.fail() inside throws, so we never write a dead value.
+        validateNetworkToken(value);
+        const sp = ui.spinner(`Verifying ${value} RPC...`).start();
+        try {
+          await verifyNetworkRpc(value);
+          sp.succeed(`${value} reachable`);
+        } catch (e) {
+          sp.fail((e as Error).message);
+          throw e;
         }
       }
       cfg[key] = value;
