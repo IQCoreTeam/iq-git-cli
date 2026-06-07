@@ -18,6 +18,7 @@ const KNOWN_KEYS = [
   "walletPath",
   "rpcUrl",
   "network",
+  "evmPrivateKey",
   "speed",
   "rps",
   "concurrency",

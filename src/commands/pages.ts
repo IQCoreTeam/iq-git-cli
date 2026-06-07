@@ -64,8 +64,11 @@ async function deployAction(): Promise<void> {
   const { repo: repoName } = repo.readConfig(cwd);
   if (!repoName) ui.fail('no repo here — run "iqgit create <name>" first');
 
-  const { signer, connection } = await setup();
-  const owner = signer.publicKey.toBase58();
+  const { signer, connection, chain, address } = await setup();
+  if (chain === "eth") {
+    ui.fail("iqgit pages deploy: not supported on EVM yet");
+  }
+  const owner = address;
 
   if (await isPagesDeployed(owner, repoName)) {
     ui.log.success(`Already deployed: ${owner}/${repoName}`);

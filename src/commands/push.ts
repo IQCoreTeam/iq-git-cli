@@ -22,7 +22,7 @@
 //     the pending dir. If we crash between those two, next push sees
 //     committedSig present and just cleans up + advances HEAD.
 
-import type { Keypair } from "@solana/web3.js";
+import type { GitSigner } from "@iqlabs-official/git-sdk";
 import type { Command } from "commander";
 import {
   uploadBlob,
@@ -131,7 +131,7 @@ function parsePositiveInt(name: string, raw: string | number): number {
 }
 
 async function pushOne(
-  signer: Keypair,
+  signer: GitSigner,
   cwd: string,
   repoName: string,
   p: repo.PendingCommit,

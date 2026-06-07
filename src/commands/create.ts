@@ -27,7 +27,7 @@ export function register(program: Command): void {
       const cwd = process.cwd();
       if (!existsSync(join(cwd, ".iqgit"))) repo.initRepo(cwd);
 
-      const { client, signer } = await setup();
+      const { client, address } = await setup();
       const isPublic = !opts.private;
 
       const sp = ui.spinner(`Creating on-chain repo ${name}...`).start();
@@ -38,14 +38,14 @@ export function register(program: Command): void {
           isPublic,
           timestamp: Date.now(),
         });
-        sp.succeed(`Created ${signer.publicKey.toBase58()}/${name}`);
+        sp.succeed(`Created ${address}/${name}`);
       } catch (e) {
         sp.fail((e as Error).message);
         process.exit(1);
       }
 
       repo.writeConfig(cwd, {
-        owner: signer.publicKey.toBase58(),
+        owner: address,
         repo: name,
         isPublic,
       });
