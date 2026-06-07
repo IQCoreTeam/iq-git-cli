@@ -8,8 +8,10 @@
 //   pages status   show whether the repo is deployed and, if so, its live URL.
 //
 //   sdk: deployPages / isPagesDeployed / readPagesConfig from the git-sdk
-//        pages layer (0.1.13+). All the on-chain logic lives there; this file
-//        only does repo-config resolution + terminal output.
+//        pages layer (0.1.15+). All the on-chain logic lives there; this file
+//        only does repo-config resolution + terminal output. The pages layer
+//        is chain-neutral, so deploy works on Solana and EVM alike — the fee is
+//        charged in the active chain's native currency by the SDK.
 //
 // deploy is a write → setup() (wallet gate). status is read-only →
 // setupReadOnly(), and reads owner/repo from .iqgit/config.json without a
@@ -19,19 +21,10 @@ import type { Command } from "commander";
 import {
   readLatestCommit,
   commitTableRef,
+  deployPages,
+  isPagesDeployed,
+  readPagesConfig,
 } from "@iqlabs-official/git-sdk/node";
-
-// deployPages / isPagesDeployed / readPagesConfig are planned git-sdk 0.1.13
-// features not yet shipped. Stubbed here until the SDK layer ships.
-async function deployPages(_connection: unknown, _signer: unknown, _repoName: string): Promise<void> {
-  throw new Error("iqgit pages: not yet available — requires git-sdk 0.1.13");
-}
-async function isPagesDeployed(_owner: string, _repoName: string): Promise<boolean> {
-  throw new Error("iqgit pages: not yet available — requires git-sdk 0.1.13");
-}
-async function readPagesConfig(_owner: string, _repoName: string): Promise<{ entry: string } | null> {
-  throw new Error("iqgit pages: not yet available — requires git-sdk 0.1.13");
-}
 import chalk from "chalk";
 import * as repo from "../core/repo";
 import { setup, setupReadOnly } from "../setup";
@@ -64,10 +57,7 @@ async function deployAction(): Promise<void> {
   const { repo: repoName } = repo.readConfig(cwd);
   if (!repoName) ui.fail('no repo here — run "iqgit create <name>" first');
 
-  const { signer, connection, chain, address } = await setup();
-  if (chain === "eth") {
-    ui.fail("iqgit pages deploy: not supported on EVM yet");
-  }
+  const { signer, address } = await setup();
   const owner = address;
 
   if (await isPagesDeployed(owner, repoName)) {
@@ -78,7 +68,7 @@ async function deployAction(): Promise<void> {
 
   const sp = ui.spinner(`Deploying ${repoName} to iq-pages...`).start();
   try {
-    await deployPages(connection, signer, repoName);
+    await deployPages(signer, repoName);
     sp.succeed(`Deployed ${owner}/${repoName}`);
   } catch (e) {
     sp.fail((e as Error).message);
