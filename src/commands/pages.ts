@@ -17,6 +17,7 @@
 // setupReadOnly(), and reads owner/repo from .iqgit/config.json without a
 // wallet so anyone can check a checked-out repo.
 
+import { join } from "node:path";
 import type { Command } from "commander";
 import {
   readLatestCommit,
@@ -25,8 +26,16 @@ import {
   isPagesDeployed,
   readPagesConfig,
 } from "@iqlabs-official/git-sdk/node";
+import type { GitSigner } from "@iqlabs-official/git-sdk";
 import chalk from "chalk";
 import * as repo from "../core/repo";
+import {
+  IQPAGES_CONFIG_FILENAME,
+  buildDefaultPagesConfig,
+  writeLocalConfig,
+} from "../core/iqpages-config";
+import { buildCommit } from "./commit";
+import { pushPending } from "./push";
 import { setup, setupReadOnly } from "../setup";
 import * as ui from "../ui";
 
@@ -66,6 +75,13 @@ async function deployAction(): Promise<void> {
     return;
   }
 
+  // deployPages requires iqpages.json in the repo's latest on-chain commit.
+  // If it isn't there, offer to scaffold + push it so deploy is one step.
+  if (!(await readPagesConfig(owner, repoName))) {
+    const ok = await ensurePagesConfig(signer, cwd, repoName);
+    if (!ok) return; // user opted to author it themselves — guidance printed
+  }
+
   const sp = ui.spinner(`Deploying ${repoName} to iq-pages...`).start();
   try {
     await deployPages(signer, repoName);
@@ -77,6 +93,48 @@ async function deployAction(): Promise<void> {
 
   await printSiteUrl(owner, repoName);
   printSnsAd(repoName);
+}
+
+// iqpages.json isn't on-chain yet. Show the default we'd write and let the user
+// choose: Yes → scaffold + add/commit/push it so deploy can proceed; No → write
+// nothing, print where to author it themselves, and bail out of deploy.
+// Returns true when the config is now committed on-chain (deploy may proceed).
+async function ensurePagesConfig(
+  signer: GitSigner,
+  cwd: string,
+  repoName: string,
+): Promise<boolean> {
+  const cfg = buildDefaultPagesConfig(repoName);
+  ui.log.warn(`${IQPAGES_CONFIG_FILENAME} is missing — IQ Pages needs it to deploy.`);
+  ui.log.info("Proposed iqpages.json:");
+  ui.log.info(chalk.gray(JSON.stringify(cfg, null, 2)));
+
+  const ok = await ui.confirm({
+    message: "Generate this iqpages.json and push it now, then deploy?",
+  });
+  if (!ok) {
+    const path = join(cwd, IQPAGES_CONFIG_FILENAME);
+    ui.log.info("No problem. To author it yourself:");
+    ui.log.info(`  1. Create/edit ${path}`);
+    ui.log.info(`  2. iqgit add ${IQPAGES_CONFIG_FILENAME}`);
+    ui.log.info('  3. iqgit commit -m "add iqpages.json"');
+    ui.log.info("  4. iqgit push");
+    ui.log.info("  5. iqgit pages deploy");
+    return false;
+  }
+
+  // Yes → write the file, stage it (alongside anything already staged), commit,
+  // and push on-chain. writeIndex de-dupes, so re-adding is safe.
+  writeLocalConfig(cwd, cfg);
+  const repoCfg = repo.readConfig(cwd);
+  repo.writeIndex(cwd, [...repo.readIndex(cwd), IQPAGES_CONFIG_FILENAME]);
+  const pending = await buildCommit(cwd, repoCfg, {
+    message: "add iqpages.json",
+    warnLarge: true,
+  });
+  if (!pending) return false; // declined large-file prompt (unlikely for a tiny json)
+  await pushPending(signer, cwd, repoName, [pending]);
+  return true;
 }
 
 async function statusAction(): Promise<void> {

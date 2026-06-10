@@ -13,10 +13,20 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import type { Command } from "commander";
 import { Connection, Keypair, LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
-import { IQGIT_ROOT_ID, repoListHint } from "@iqlabs-official/git-sdk/node";
+import chalk from "chalk";
+import {
+  IQGIT_ROOT_ID,
+  commitTableHint,
+  listPagesDeployments,
+  repoListHint,
+} from "@iqlabs-official/git-sdk/node";
 import { getDbRootPda, getTablePda } from "@iqlabs-official/solana-sdk/contract";
 import { toSeedBytes } from "@iqlabs-official/solana-sdk/utils";
 import { gwFetchAllRows } from "../core/gateway";
+
+// Where a deployed repo's on-chain page lives. Its base58 path segment is the
+// repo's git_commits table PDA; the wide-web resolver turns that into the site.
+const BROWSER_BASE = "https://browser.iqlabs.dev";
 import { DEFAULT_WALLET, loadKeypairFromFile, readGlobalConfig, setup } from "../setup";
 
 import * as ui from "../ui";
@@ -87,8 +97,21 @@ async function walletRepos(): Promise<void> {
     ui.log.dim("no repos yet");
     return;
   }
+
+  // Which of these repos are live on iq-pages? Only those get a browser URL.
+  // One gallery read covers every owner; filter to this wallet's deploys.
+  const deployments = await listPagesDeployments();
+  const deployedRepos = new Set(
+    deployments.filter((d) => d.owner === owner).map((d) => d.repo),
+  );
+
   for (const r of repos) {
     const visibility = r.isPublic ? "public " : "private";
-    ui.log.info(`${visibility}  ${r.name}  ${r.description}`);
+    let line = `${visibility}  ${r.name}  ${r.description}`;
+    if (deployedRepos.has(r.name)) {
+      const pda = getTablePda(dbRoot, toSeedBytes(commitTableHint(owner, r.name)));
+      line += `  ${chalk.cyan(`→ ${BROWSER_BASE}/${pda.toBase58()}`)}`;
+    }
+    ui.log.info(line);
   }
 }

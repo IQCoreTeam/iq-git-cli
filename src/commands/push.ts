@@ -75,22 +75,35 @@ export function register(program: Command): void {
       }
       const speed = resolveSpeed(opts);
       const { signer } = await setup();
-
-      for (const p of queue) {
-        ui.log.info(`pushing ${p.meta.id.slice(0, 7)} "${p.meta.message}"`);
-        try {
-          await pushOne(signer, cwd, cfg.repo, p, speed);
-        } catch (e) {
-          ui.fail(
-            `failed at ${p.meta.id.slice(0, 7)}: ${(e as Error).message}\n` +
-              `re-run "iqgit push" to resume.`,
-          );
-        }
-        repo.writeHead(cwd, p.meta.id);
-        repo.discardPending(p);
-        ui.log.success(`  pushed ${p.meta.id.slice(0, 7)}`);
-      }
+      await pushPending(signer, cwd, cfg.repo, queue, speed);
     });
+}
+
+/** Drain a set of pending commits to chain, in order, resume-safely. Shared by
+ *  the `push` command and `pages deploy`'s auto-push of a generated
+ *  iqpages.json. Each commit advances HEAD + clears its pending dir only after
+ *  its row is on-chain. */
+export async function pushPending(
+  signer: GitSigner,
+  cwd: string,
+  repoName: string,
+  queue: repo.PendingCommit[],
+  speed?: SessionSpeed,
+): Promise<void> {
+  for (const p of queue) {
+    ui.log.info(`pushing ${p.meta.id.slice(0, 7)} "${p.meta.message}"`);
+    try {
+      await pushOne(signer, cwd, repoName, p, speed);
+    } catch (e) {
+      ui.fail(
+        `failed at ${p.meta.id.slice(0, 7)}: ${(e as Error).message}\n` +
+          `re-run "iqgit push" to resume.`,
+      );
+    }
+    repo.writeHead(cwd, p.meta.id);
+    repo.discardPending(p);
+    ui.log.success(`  pushed ${p.meta.id.slice(0, 7)}`);
+  }
 }
 
 function resolveSpeed(opts: PushOpts): SessionSpeed | undefined {
