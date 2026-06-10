@@ -231,6 +231,12 @@ src/
                         #  restore, log, status, registry, pages, config, wallet)
 ```
 
+## trouble shooting
+if iqpages.json error 
+✖ iqpages.json missing in puter-angel. Commit it first, then deploy.
+use this command to bypass the gateway and use RPC directly
+`GATEWAY_URL=off SOLANA_RPC_ENDPOINT="your-helius-url" iqgit -n mainnet pages deploy`
+
 ## License
 
 Apache-2.0. See [LICENSE](LICENSE).
