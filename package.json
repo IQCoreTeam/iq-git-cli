@@ -44,7 +44,7 @@
   },
   "devDependencies": {
     "@iqlabs-official/ethereum-sdk": "^0.2.2",
-    "@iqlabs-official/git-sdk": "^0.1.17",
+    "@iqlabs-official/git-sdk": "^0.1.18",
     "@types/node": "^20.11.0",
     "tsup": "^8.0.0",
     "typescript": "^5.4.0"
