@@ -34,6 +34,7 @@ import {
   buildDefaultPagesConfig,
   writeLocalConfig,
 } from "../core/iqpages-config";
+import { browserUrl } from "../core/browser-url";
 import { buildCommit } from "./commit";
 import { pushPending } from "./push";
 import { setup, setupReadOnly } from "../setup";
@@ -153,16 +154,21 @@ async function statusAction(): Promise<void> {
   }
 }
 
-// Resolve the live URL from the repo's latest commit tree + iqpages.json
-// `entry`. Best-effort: a freshly-deployed repo always has both, but we don't
-// want a missing-config edge case to mask a successful deploy.
+// Show where the deployed site lives. Two URLs, different jobs:
+//   • browser.iqlabs.dev/<pda>  — the shareable link. browser resolves the
+//     owner's latest commit itself, so it survives re-commits. Always printable
+//     (the PDA is derived from owner/repo — no chain read needed).
+//   • <gateway>/site/<treeTxId>/<entry> — pins THIS commit's files. Best-effort:
+//     skipped if the latest commit / iqpages.json can't be read right now.
 async function printSiteUrl(owner: string, repoName: string): Promise<void> {
+  ui.log.info(`  ${chalk.cyan(browserUrl(owner, repoName))}`);
+
   const [latest, config] = await Promise.all([
     readLatestCommit(commitTableRef(owner, repoName)),
     readPagesConfig(owner, repoName),
   ]);
   if (!latest || !config) return;
-  ui.log.info(`  ${SITE_BASE}/${latest.treeTxId}/${config.entry}`);
+  ui.log.dim(`  ${SITE_BASE}/${latest.treeTxId}/${config.entry}`);
 }
 
 // Green ad nudging the user to claim a .sns domain for their fresh site.
