@@ -34,7 +34,7 @@ import {
   buildDefaultPagesConfig,
   writeLocalConfig,
 } from "../core/iqpages-config";
-import { browserUrl } from "../core/browser-url";
+import { browserUrl, commitTablePda } from "../core/browser-url";
 import { buildCommit } from "./commit";
 import { pushPending } from "./push";
 import { setup, setupReadOnly } from "../setup";
@@ -93,7 +93,7 @@ async function deployAction(): Promise<void> {
   }
 
   await printSiteUrl(owner, repoName);
-  printSnsAd(repoName);
+  printSnsGuide(owner, repoName);
 }
 
 // iqpages.json isn't on-chain yet. Show the default we'd write and let the user
@@ -171,12 +171,18 @@ async function printSiteUrl(owner: string, repoName: string): Promise<void> {
   ui.log.dim(`  ${SITE_BASE}/${latest.treeTxId}/${config.entry}`);
 }
 
-// Green ad nudging the user to claim a .sns domain for their fresh site.
-// Placeholder copy until the .sns flow ships — swap the URL when it lands.
-function printSnsAd(repoName: string): void {
-  console.log(
-    chalk.green(
-      `\n🌐 Give ${repoName} a name: register a .sns domain for your site → https://sns.iqlabs.dev`,
-    ),
-  );
+// Step-by-step guide to put the deployed site behind a <name>.sol.site URL.
+// The visitor sets a CNAME (so sol.site routes traffic to us) plus the site's
+// PDA in a SOL/TXT record (so our resolver knows which deployed site to serve).
+function printSnsGuide(owner: string, repoName: string): void {
+  const pda = commitTablePda(owner, repoName);
+  console.log(chalk.green(`\n🌐 Put ${repoName} on your own .sol domain (<name>.sol.site):`));
+  console.log(chalk.gray("  1. Open https://sns.id and go to your domain (My Domains)."));
+  console.log(chalk.gray('  2. In the "Sol.site" section, click "Configure".'));
+  console.log(`     ${chalk.gray("• CNAME →")} ${chalk.cyan("sns.iqlabs.dev")}`);
+  console.log(chalk.gray('  3. Under "Other records", add your site\'s PDA — prefer the SOL'));
+  console.log(chalk.gray("     record; if there's no SOL field, use a TXT record instead:"));
+  console.log(`     ${chalk.gray("• SOL (or TXT) →")} ${chalk.cyan(pda)}`);
+  console.log(chalk.gray("  4. Sign. After DNS propagates (~5 min), your site is live at"));
+  console.log(chalk.gray("     https://<your-name>.sol.site"));
 }
